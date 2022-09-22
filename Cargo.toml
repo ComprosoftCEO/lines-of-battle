@@ -9,16 +9,17 @@ default-run = "game-server"
 actix = "0.13.0"
 actix-codec = "0.5.0"
 actix-http = "3.2.2"
-actix-web = { version = "4", features = ["openssl"] }
+actix-web = { version = "4", features = ["rustls"] }
 actix-web-actors = "4.1.0"
 actix-web-httpauth = "0.8.0"
 anyhow = "1.0.65"
-awc = { version = "3.0.1", features = ["openssl"] }
+awc = { version = "3.0.1", features = ["rustls"] }
 chrono = "0.4.22"
 dotenv = "0.15.0"
 jsonwebtoken = "7.2.0"
 log = "0.4.17"
-openssl = "0.10.41"
+rustls = "0.20.2"
+rustls-pemfile = "1"
 serde = "1.0.144"
 serde_json = { version = "1.0.85", features = ["preserve_order"] }
 serde_repr = "0.1.9"

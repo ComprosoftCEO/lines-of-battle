@@ -1,8 +1,10 @@
 use actix::Actor;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use log::LevelFilter;
-use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslFiletype, SslMethod};
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use simple_logger::SimpleLogger;
+use std::{fs::File, io::BufReader};
 use structopt::StructOpt;
 
 use game_server::config;
@@ -41,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
   // Possibly enable SSL
   let ip_port = format!("{}:{}", config::get_host(), config::get_port());
   server = if config::use_https() {
-    server.bind_openssl(ip_port, get_ssl_configuration()?)?
+    server.bind_rustls(ip_port, get_ssl_configuration()?)?
   } else {
     server.bind(ip_port)?
   };
@@ -53,21 +55,34 @@ async fn main() -> anyhow::Result<()> {
 ///
 /// Load and configure SSL if required
 ///
-fn get_ssl_configuration() -> anyhow::Result<SslAcceptorBuilder> {
-  let private_key_file =
-    config::get_key_file().ok_or_else(|| anyhow::anyhow!("KEY_FILE environment variable not set"))?;
+fn get_ssl_configuration() -> anyhow::Result<ServerConfig> {
+  let key_filename = config::get_key_file().ok_or_else(|| anyhow::anyhow!("KEY_FILE environment variable not set"))?;
+  let cert_filename =
+    config::get_cert_file().ok_or_else(|| anyhow::anyhow!("CERT_FILE environment variable not set"))?;
 
-  let cert_file = config::get_cert_file().ok_or_else(|| anyhow::anyhow!("CERT_FILE environment variable not set"))?;
+  // Init server config builder with safe defaults
+  let config = ServerConfig::builder().with_safe_defaults().with_no_client_auth();
 
-  let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
+  // Read the TLS key/cert files
+  let cert_file = &mut BufReader::new(
+    File::open(&key_filename).or_else(|e| Err(anyhow::anyhow!("Failed to open '{}': {}", key_filename, e)))?,
+  );
+  let key_file = &mut BufReader::new(
+    File::open(&cert_filename).or_else(|e| Err(anyhow::anyhow!("Failed to open '{}': {}", cert_filename, e)))?,
+  );
 
-  // Load private key and certificate chain, then validate our SSL configuration
-  acceptor.set_private_key_file(&private_key_file, SslFiletype::PEM)?;
-  acceptor.set_certificate_chain_file(&cert_file)?;
-  acceptor.check_private_key()?;
+  // Convert files to key/cert objects
+  let cert_chain = certs(cert_file)?.into_iter().map(Certificate).collect();
+  let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)?.into_iter().map(PrivateKey).collect();
 
-  log::debug!("Loaded SSL key file from: {}", private_key_file);
-  log::debug!("Loaded SSL certificate chain file from: {}", cert_file);
+  // Exit if no keys could be parsed
+  if keys.is_empty() {
+    Err(anyhow::anyhow!("Could not locate PKCS 8 private keys."))?;
+  }
 
-  Ok(acceptor)
+  let config = config.with_single_cert(cert_chain, keys.remove(0))?;
+  log::debug!("Loaded SSL key file from: {}", key_filename);
+  log::debug!("Loaded SSL certificate chain file from: {}", cert_filename);
+
+  Ok(config)
 }
