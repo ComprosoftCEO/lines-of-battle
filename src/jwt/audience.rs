@@ -1,10 +1,13 @@
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
 /// Route is only available to player clients
+#[derive(Deserialize)]
 pub struct Player;
 
 /// Route is only available to viewer clients
+#[derive(Deserialize)]
 pub struct Viewer;
 
 /// Generic trait shared by all audience types

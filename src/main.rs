@@ -1,5 +1,6 @@
 use actix::Actor;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use game_server::actors::GameMediatorActor;
 use log::LevelFilter;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
@@ -9,6 +10,7 @@ use structopt::StructOpt;
 
 use game_server::config;
 use game_server::errors::ServiceError;
+use game_server::handlers;
 use game_server::jwt::JWTSecret;
 
 #[actix_web::main]
@@ -27,11 +29,16 @@ async fn main() -> anyhow::Result<()> {
     log::set_max_level(LevelFilter::Info);
   }
 
+  // Start the game mediator actor
+  let game_mediator = GameMediatorActor::new().start();
+
   // Database connection pool and web server
   let mut server = HttpServer::new(move || {
     App::new()
       // Secret key for JSON Web Tokens
       .app_data(web::Data::new(JWTSecret::new(config::get_jwt_secret())))
+      // Game mediator actor
+      .app_data(web::Data::new(game_mediator.clone()))
       // Enable logger
       .wrap(middleware::Logger::default())
       // Configure error handlers
@@ -39,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
       .app_data(web::FormConfig::default().error_handler(|err, _req| ServiceError::from(err).into()))
       .app_data(web::PathConfig::default().error_handler(|err, _req| ServiceError::from(err).into()))
       .app_data(web::QueryConfig::default().error_handler(|err, _req| ServiceError::from(err).into()))
+      .service(web::scope("/api/v1/play").route("", web::get().to(handlers::connect_player)))
       // Load all routes
       .default_service(web::route().to(|| HttpResponse::NotFound()))
   });

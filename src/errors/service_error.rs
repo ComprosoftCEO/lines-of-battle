@@ -1,3 +1,4 @@
+use actix::MailboxError;
 use actix_web::error::{JsonPayloadError, PathError, QueryPayloadError, UrlencodedError};
 use actix_web::http::header::ToStrError;
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
@@ -5,6 +6,7 @@ use actix_web_httpauth::extractors::AuthenticationError;
 use actix_web_httpauth::headers::www_authenticate::bearer::Bearer;
 use jsonwebtoken::errors::Error as JWTError;
 use std::{error, fmt};
+use uuid::Uuid;
 
 use crate::errors::*;
 
@@ -20,6 +22,10 @@ pub enum ServiceError {
   JWTExtractorError(AuthenticationError<Bearer>),
   MissingWebsocketJWT,
   WebsocketJWTParseError(ToStrError),
+  WebsocketError(WebsocketError),
+  WebsocketMailboxError(MailboxError),
+  NotRegistered(Uuid),
+  AlreadyConnected(Uuid),
 }
 
 impl ServiceError {
@@ -87,6 +93,34 @@ impl ServiceError {
         GlobalErrorCode::InvalidJWTToken,
         format!("{}", error),
       ),
+
+      ServiceError::WebsocketError(error) => ErrorResponse::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Unexpected websocket error".into(),
+        GlobalErrorCode::WebsocketError,
+        format!("{:#?}", error),
+      ),
+
+      ServiceError::WebsocketMailboxError(error) => ErrorResponse::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Actix message error".into(),
+        GlobalErrorCode::WebsocketError,
+        format!("{:?}", error),
+      ),
+
+      ServiceError::NotRegistered(player_id) => ErrorResponse::new(
+        StatusCode::CONFLICT,
+        "Player not registered to play in the game".into(),
+        GlobalErrorCode::NotRegistered,
+        format!("Player ID: {}", player_id),
+      ),
+
+      ServiceError::AlreadyConnected(player_id) => ErrorResponse::new(
+        StatusCode::CONFLICT,
+        "Player already connected on another websocket".into(),
+        GlobalErrorCode::AlreadyConnected,
+        format!("Player ID: {}", player_id),
+      ),
     }
   }
 }
@@ -146,5 +180,11 @@ impl From<JWTError> for ServiceError {
 impl From<AuthenticationError<Bearer>> for ServiceError {
   fn from(error: AuthenticationError<Bearer>) -> Self {
     ServiceError::JWTExtractorError(error)
+  }
+}
+
+impl From<WebsocketError> for ServiceError {
+  fn from(error: WebsocketError) -> Self {
+    ServiceError::WebsocketError(error)
   }
 }

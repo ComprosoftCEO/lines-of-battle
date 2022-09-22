@@ -12,4 +12,7 @@ pub enum GlobalErrorCode {
   QueryStringError,
   StructValidationError,
   InvalidJWTToken,
+  WebsocketError,
+  NotRegistered,
+  AlreadyConnected,
 }
