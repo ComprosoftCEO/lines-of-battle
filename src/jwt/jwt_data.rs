@@ -6,3 +6,13 @@ use serde::{Deserialize, Serialize};
 pub struct JWTPlayerData {
   name: String,
 }
+
+impl JWTPlayerData {
+  pub fn new(name: impl Into<String>) -> Self {
+    Self { name: name.into() }
+  }
+
+  pub fn get_name(&self) -> &String {
+    &self.name
+  }
+}

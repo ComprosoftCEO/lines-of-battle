@@ -72,7 +72,7 @@ where
 
       // Validation parameters,
       let validation = Validation {
-        algorithms: vec![Algorithm::RS256],
+        algorithms: vec![Algorithm::HS256],
         validate_exp: true,
         leeway: 15,
         aud: Some(A::accepts()),

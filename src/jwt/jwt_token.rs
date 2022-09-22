@@ -52,6 +52,14 @@ impl<A: Audience, T> JWTToken<A, T> {
   pub fn get_user_id(&self) -> Uuid {
     self.sub
   }
+
+  pub fn get_data(&self) -> &T {
+    &self.user_data
+  }
+
+  pub fn into_data(self) -> T {
+    self.user_data
+  }
 }
 
 impl<A, T> JWTToken<A, T>
@@ -61,7 +69,7 @@ where
 {
   /// Encode the JSON Web Token into a string
   pub fn encode(&self, key: &EncodingKey) -> Result<String, jsonwebtoken::errors::Error> {
-    Ok(encode(&Header::new(Algorithm::RS256), self, key)?)
+    Ok(encode(&Header::new(Algorithm::HS256), self, key)?)
   }
 }
 
@@ -85,7 +93,7 @@ where
 
       // Validation parameters,
       let validation = Validation {
-        algorithms: vec![Algorithm::RS256],
+        algorithms: vec![Algorithm::HS256],
         validate_exp: true,
         leeway: 15,
         aud: Some(A::accepts()),
