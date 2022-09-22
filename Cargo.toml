@@ -16,6 +16,7 @@ anyhow = "1.0.65"
 awc = { version = "3.0.1", features = ["rustls"] }
 chrono = "0.4.22"
 dotenv = "0.15.0"
+futures = "0.3"
 jsonwebtoken = "7.2.0"
 log = "0.4.17"
 rustls = "0.20.2"
@@ -25,4 +26,4 @@ serde_json = { version = "1.0.85", features = ["preserve_order"] }
 serde_repr = "0.1.9"
 simple_logger = "2.3.0"
 structopt = "0.3.26"
-uuid-b64 = { version = "0.1.1", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }

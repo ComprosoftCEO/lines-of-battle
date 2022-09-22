@@ -9,6 +9,7 @@ use structopt::StructOpt;
 
 use game_server::config;
 use game_server::errors::ServiceError;
+use game_server::jwt::JWTSecret;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
   // Database connection pool and web server
   let mut server = HttpServer::new(move || {
     App::new()
+      // Secret key for JSON Web Tokens
+      .app_data(web::Data::new(JWTSecret::new(config::get_jwt_secret())))
       // Enable logger
       .wrap(middleware::Logger::default())
       // Configure error handlers
