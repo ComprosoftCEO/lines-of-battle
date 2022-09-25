@@ -5,11 +5,14 @@ use log::LevelFilter;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simple_logger::SimpleLogger;
+use std::sync::mpsc::channel;
+use std::thread;
 use std::{fs::File, io::BufReader};
 use structopt::StructOpt;
 
 use game_server::config;
 use game_server::errors::ServiceError;
+use game_server::game::GamePlayer;
 use game_server::handlers;
 use game_server::jwt::JWTSecret;
 
@@ -29,8 +32,21 @@ async fn main() -> anyhow::Result<()> {
     log::set_max_level(LevelFilter::Info);
   }
 
+  // Channels for the game engine communication
+  let (send_start_game, recv_start_game) = channel();
+  let (send_player_actions, recv_player_actions) = channel();
+
   // Start the game mediator actor
-  let game_mediator = GameMediatorActor::new().start();
+  let game_mediator = GameMediatorActor::new(send_start_game).start();
+
+  // Load the Lua file into the game engine
+  let lua_file = config::get_lua_file();
+  log::info!("Loading Lua game engine from '{}'", lua_file);
+  let mut game_player = GamePlayer::new(lua_file, recv_start_game, recv_player_actions, game_mediator.clone())
+    .map_err(|e| anyhow::anyhow!("failed to start game engine: {}", e.get_developer_notes()))?;
+
+  log::info!("Running game engine on a separate thread");
+  thread::spawn(move || game_player.run_game());
 
   // Database connection pool and web server
   let mut server = HttpServer::new(move || {

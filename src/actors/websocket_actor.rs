@@ -178,12 +178,6 @@ impl Handler<NonFatalError> for WebsocketActor {
   }
 }
 
-impl Handler<GameStateUpdate> for WebsocketActor {
-  type Result = ();
-
-  fn handle(&mut self, _update: GameStateUpdate, _ctx: &mut Self::Context) -> Self::Result {}
-}
-
 impl Handler<ConnectResponse> for WebsocketActor {
   type Result = ();
 

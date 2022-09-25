@@ -9,6 +9,7 @@ use structopt::StructOpt;
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 53700;
 const DEFAULT_JWT_SECRET: &str = "secret";
+const DEFAULT_LUA_FILE: &str = "lua/game.lua";
 
 /// API Game Server for the Semester Project
 #[derive(StructOpt)]
@@ -36,6 +37,10 @@ pub struct Opt {
   /// JSON Web Token secret
   #[structopt(short = "s", long, env, hide_env_values = true, default_value = DEFAULT_JWT_SECRET, hide_default_value(true))]
   jwt_secret: String,
+
+  /// Lua file containing the game engine code
+  #[structopt(long, env, default_value = DEFAULT_LUA_FILE)]
+  lua_file: String,
 }
 
 impl Opt {
@@ -55,6 +60,7 @@ impl Opt {
     }
 
     env::set_var("JWT_SECRET", &self.jwt_secret);
+    env::set_var("LUA_FILE", &self.lua_file);
   }
 }
 
@@ -105,4 +111,11 @@ pub fn get_cert_file() -> Option<String> {
 //
 pub fn get_jwt_secret() -> String {
   env::var("JWT_SECRET").unwrap_or_else(|_| DEFAULT_JWT_SECRET.into())
+}
+
+//
+// Lua engine code
+//
+pub fn get_lua_file() -> String {
+  env::var("LUA_FILE").unwrap_or_else(|_| DEFAULT_LUA_FILE.into())
 }

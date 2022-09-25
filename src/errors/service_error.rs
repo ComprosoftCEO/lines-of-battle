@@ -26,6 +26,7 @@ pub enum ServiceError {
   WebsocketMailboxError(MailboxError),
   NotRegistered(Uuid),
   AlreadyConnected(Uuid),
+  GameEngineError(GameEngineError),
 }
 
 impl ServiceError {
@@ -121,6 +122,13 @@ impl ServiceError {
         GlobalErrorCode::AlreadyConnected,
         format!("Player ID: {}", player_id),
       ),
+
+      ServiceError::GameEngineError(error) => ErrorResponse::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Internal game engine error".into(),
+        GlobalErrorCode::GameEngineError,
+        error.get_developer_notes(),
+      ),
     }
   }
 }
@@ -186,5 +194,11 @@ impl From<AuthenticationError<Bearer>> for ServiceError {
 impl From<WebsocketError> for ServiceError {
   fn from(error: WebsocketError) -> Self {
     ServiceError::WebsocketError(error)
+  }
+}
+
+impl From<GameEngineError> for ServiceError {
+  fn from(error: GameEngineError) -> Self {
+    ServiceError::GameEngineError(error)
   }
 }

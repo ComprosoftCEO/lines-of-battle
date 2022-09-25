@@ -24,7 +24,7 @@ end
 -- ====================================================
 --  Initialization routine - Receives array of players
 -- ====================================================
-function Init(players)
+function Init(ctx, players)
   playerOrder = players
   pf, pfRows, pfCols = playfield.newPlayfield(10, 10)
 

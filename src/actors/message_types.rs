@@ -1,14 +1,10 @@
 use actix::prelude::*;
+use serde::Serialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Sent to the websocket actors on a game state update
-#[derive(Debug, Clone, Message)]
-#[rtype(result = "()")]
-pub enum GameStateUpdate {
-  GameStart,
-  StateUpdate,
-  GameOver,
-}
+use crate::actors::WebsocketActor;
+use crate::protocol::{GameStateUpdate, PlayerAction};
 
 /// Test if the game is currently running
 #[derive(Debug, Clone, Message)]
@@ -28,7 +24,7 @@ pub struct IsPlayerConnected(pub Uuid);
 /// Connect a user with the mediator
 #[derive(Debug, Clone, Message)]
 #[rtype(result = "ConnectResponse")]
-pub struct Connect(pub Uuid, pub Recipient<GameStateUpdate>);
+pub struct Connect(pub Uuid, pub Addr<WebsocketActor>);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Message, MessageResponse)]
 #[rtype(result = "()")]
@@ -42,3 +38,8 @@ pub enum ConnectResponse {
 #[derive(Debug, Clone, Message)]
 #[rtype(result = "()")]
 pub struct Disconnect(pub Uuid);
+
+/// Fatal error has caused the game engine to crash - Server must reboot!
+#[derive(Debug, Clone, Message)]
+#[rtype(result = "()")]
+pub struct GameEngineCrash;

@@ -1,22 +1,26 @@
 use actix::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::sync::mpsc::Sender;
 use uuid::Uuid;
 
-use super::message_types::*;
+use crate::actors::{message_types::*, WebsocketActor};
+use crate::protocol::{GameStateUpdate, PlayerAction};
 
 /// Actor that facilitates communication between the websocket actors and the game engine
 pub struct GameMediatorActor {
   game_running: bool,
   registered: HashSet<Uuid>,
-  actors: HashMap<Uuid, Recipient<GameStateUpdate>>,
+  actors: HashMap<Uuid, Addr<WebsocketActor>>,
+  send_start_game: Sender<Vec<Uuid>>,
 }
 
 impl GameMediatorActor {
-  pub fn new() -> Self {
+  pub fn new(send_start_game: Sender<Vec<Uuid>>) -> Self {
     Self {
       game_running: false,
       registered: HashSet::new(),
       actors: HashMap::new(),
+      send_start_game,
     }
   }
 }
@@ -74,4 +78,16 @@ impl Handler<Disconnect> for GameMediatorActor {
     // Force remove the entry, even if it doesn't exist
     self.actors.remove(&player_id);
   }
+}
+
+impl Handler<GameStateUpdate> for GameMediatorActor {
+  type Result = ();
+
+  fn handle(&mut self, update: GameStateUpdate, _: &mut Self::Context) -> Self::Result {}
+}
+
+impl Handler<GameEngineCrash> for GameMediatorActor {
+  type Result = ();
+
+  fn handle(&mut self, err: GameEngineCrash, _: &mut Self::Context) -> Self::Result {}
 }

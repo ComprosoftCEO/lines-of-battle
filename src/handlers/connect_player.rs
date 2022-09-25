@@ -29,7 +29,7 @@ pub async fn connect_player(
   // Register the actor with the mediator -- might return an error
   log::debug!("Registering actor with the game mediator...");
   let connect_response = mediator
-    .send(Connect(player_id, addr.clone().recipient()))
+    .send(Connect(player_id, addr.clone()))
     .await
     .map_err(ServiceError::WebsocketMailboxError)?;
 

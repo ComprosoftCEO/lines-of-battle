@@ -1,9 +1,13 @@
+use crate::protocol::ProtocolRequest;
 use serde::{Deserialize, Serialize};
 
-/// List of all actions the player can take in the game
+/// PlayerAction with an optional associated tag
+pub type PlayerAction = ProtocolRequest<PlayerActionEnum>;
+
+/// Enum of the actual actions taken
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum AllPlayerActions {
+pub enum PlayerActionEnum {
   Move(MoveAction),
   Attack(AttackAction),
   DropWeapon,
