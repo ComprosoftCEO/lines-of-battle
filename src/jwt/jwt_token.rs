@@ -13,7 +13,7 @@ use crate::errors::ServiceError;
 use crate::jwt::{Audience, JWT_ISSUER};
 
 /// JSON Web Token used for user authentication
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JWTToken<A: Audience, T> {
   // Reserved Claims

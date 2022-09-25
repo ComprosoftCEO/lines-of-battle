@@ -772,6 +772,7 @@ dependencies = [
  "actix-web-httpauth",
  "anyhow",
  "awc",
+ "bytestring",
  "chrono",
  "chrono-english",
  "dotenv",

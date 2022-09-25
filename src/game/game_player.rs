@@ -9,9 +9,9 @@ use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::actors::{message_types::*, GameMediatorActor};
+use crate::actors::{shared_messages::*, GameMediatorActor};
 use crate::errors::GameEngineError;
-use crate::protocol::{GameStateUpdate, PlayerAction};
+use crate::protocol::{game::GameState, GameStateUpdate, PlayerAction};
 
 const SECONDS_PER_GAME: u32 = 60 * 3;
 const MAX_TRIES: usize = 5;
@@ -142,7 +142,14 @@ impl GamePlayer {
         self.seconds_left -= 1;
 
         // Read the list of player actions from the channel
-        let player_actions: HashMap<_, _> = self.recv_player_actions.try_iter().collect();
+        //  Filter any actions for players that have died (just to be extra safe)
+        let players_remaining = self.players_remaining.lock().unwrap();
+        let player_actions: HashMap<_, _> = self
+          .recv_player_actions
+          .try_iter()
+          .filter(|(id, _)| players_remaining.contains(id))
+          .collect();
+        drop(players_remaining);
 
         // Update the game state
         let next_state = Self::trap_errors(MAX_TRIES, || self.tick_game(&player_actions))?;
@@ -166,10 +173,11 @@ impl GamePlayer {
   }
 
   /// Handle game initialization with the given player order
-  fn init_game(&mut self, player_order: &Vec<Uuid>) -> Result<serde_json::Value, GameEngineError> {
+  fn init_game(&mut self, player_order: &Vec<Uuid>) -> Result<GameState, GameEngineError> {
     // Initialize game player variables
     self.player_order = Arc::new(player_order.clone());
     self.seconds_left = self.seconds_per_game;
+    self.players_remaining = Arc::new(Mutex::new(player_order.iter().cloned().collect()));
 
     // Run the Lua Init() method and return the initial game state as JSON
     self.lua.context::<_, Result<_, GameEngineError>>(|ctx| {
@@ -185,8 +193,7 @@ impl GamePlayer {
         .call::<_, LuaValue>((user_data, player_order))
         .map_err(|e| GameEngineError::FailedToRunMethod("Init", e))?;
 
-      let json_game_state: serde_json::Value =
-        rlua_serde::from_value(lua_game_state).map_err(GameEngineError::LuaToJSON)?;
+      let json_game_state: GameState = rlua_serde::from_value(lua_game_state).map_err(GameEngineError::LuaToJSON)?;
 
       Ok(json_game_state)
     })
@@ -196,7 +203,7 @@ impl GamePlayer {
   ///   Call the Lua Update() method and return the next game state
   ///
   /// Does NOT handle the logic for "seconds left"
-  fn tick_game(&mut self, player_actions: &HashMap<Uuid, PlayerAction>) -> Result<serde_json::Value, GameEngineError> {
+  fn tick_game(&mut self, player_actions: &HashMap<Uuid, PlayerAction>) -> Result<GameState, GameEngineError> {
     self.lua.context(|ctx| {
       let player_actions: HashMap<String, LuaValue> = player_actions
         .iter()
@@ -217,8 +224,7 @@ impl GamePlayer {
         .call::<_, LuaValue>((user_data, player_actions))
         .map_err(|e| GameEngineError::FailedToRunMethod("Update", e))?;
 
-      let json_game_state: serde_json::Value =
-        rlua_serde::from_value(lua_game_state).map_err(GameEngineError::LuaToJSON)?;
+      let json_game_state: GameState = rlua_serde::from_value(lua_game_state).map_err(GameEngineError::LuaToJSON)?;
 
       Ok(json_game_state)
     })
@@ -238,11 +244,11 @@ impl GamePlayer {
           log::error!(
             "Game engine error: {} (Attempt {} / {})",
             e.get_developer_notes(),
-            tries + 1,
+            tries,
             max_tries
           );
 
-          if tries > max_tries {
+          if tries >= max_tries {
             return Err(e);
           }
         },

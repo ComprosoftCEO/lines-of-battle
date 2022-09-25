@@ -9,7 +9,7 @@ use crate::jwt::{Audience, JWTSecret, JWTToken, JWT_ISSUER};
 use crate::WS_PROTOCOL;
 
 /// Special JWT token that deserializes from the 'Sec-WebSocket-Protocol' header
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct JWTWebsocketToken<A: Audience, T>(JWTToken<A, T>);
 
 impl<A: Audience, T> JWTWebsocketToken<A, T> {

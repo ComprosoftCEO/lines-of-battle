@@ -25,8 +25,12 @@ pub enum ServiceError {
   WebsocketError(WebsocketError),
   WebsocketMailboxError(MailboxError),
   NotRegistered(Uuid),
+  FailedToRegister(Uuid),
+  FailedToUnregister(Uuid),
   AlreadyConnected(Uuid),
   GameEngineError(GameEngineError),
+  GameEngineCrash,
+  CannotSendAction { why: String },
 }
 
 impl ServiceError {
@@ -116,6 +120,20 @@ impl ServiceError {
         format!("Player ID: {}", player_id),
       ),
 
+      ServiceError::FailedToRegister(player_id) => ErrorResponse::new(
+        StatusCode::CONFLICT,
+        "Failed to register player".into(),
+        GlobalErrorCode::FailedToRegister,
+        format!("Player ID: {}", player_id),
+      ),
+
+      ServiceError::FailedToUnregister(player_id) => ErrorResponse::new(
+        StatusCode::CONFLICT,
+        "Failed to unregister player".into(),
+        GlobalErrorCode::FailedToUnregister,
+        format!("Player ID: {}", player_id),
+      ),
+
       ServiceError::AlreadyConnected(player_id) => ErrorResponse::new(
         StatusCode::CONFLICT,
         "Player already connected on another websocket".into(),
@@ -128,6 +146,20 @@ impl ServiceError {
         "Internal game engine error".into(),
         GlobalErrorCode::GameEngineError,
         error.get_developer_notes(),
+      ),
+
+      ServiceError::GameEngineCrash => ErrorResponse::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Game engine has crashed".into(),
+        GlobalErrorCode::GameEngineCrash,
+        "".into(),
+      ),
+
+      ServiceError::CannotSendAction { why } => ErrorResponse::new(
+        StatusCode::CONFLICT,
+        format!("Cannot send action: {}", why),
+        GlobalErrorCode::CannotSendAction,
+        "".into(),
       ),
     }
   }

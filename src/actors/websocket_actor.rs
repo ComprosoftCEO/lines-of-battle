@@ -1,27 +1,47 @@
 //
 // Actor that broadcasts the websocket notifications
 //
+use actix::fut::wrap_future;
 use actix::prelude::*;
 use actix_http::ws::{CloseCode, CloseReason};
-use actix_http::StatusCode;
 use actix_web_actors::ws;
 use serde::Serialize;
+use std::sync::mpsc::Sender;
 use uuid::Uuid;
 
-use crate::actors::{message_types::*, GameMediatorActor};
-use crate::errors::{ErrorResponse, GlobalErrorCode};
+use crate::actors::{mediator_messages::*, shared_messages::*, websocket_messages::*, GameMediatorActor};
+use crate::errors::{ServiceError, WebsocketError};
+use crate::game::GameState;
+use crate::jwt::{JWTPlayerData, PlayerToken};
+use crate::protocol::{PlayerAction, WebsocketMessage};
 
 /// Actor used for managing the websocket communication
 pub struct WebsocketActor {
   player_id: Uuid,
+  player_data: JWTPlayerData,
   game_mediator: Addr<GameMediatorActor>,
+  send_player_action: Sender<(Uuid, PlayerAction)>,
+
+  game_state: GameState,
+  action_sent: bool,
+  player_killed: bool,
 }
 
 impl WebsocketActor {
-  pub fn new(player_id: Uuid, game_mediator: Addr<GameMediatorActor>) -> Self {
+  pub fn new(
+    player_token: PlayerToken,
+    game_mediator: Addr<GameMediatorActor>,
+    send_player_action: Sender<(Uuid, PlayerAction)>,
+  ) -> Self {
     Self {
-      player_id,
+      player_id: player_token.get_player_id(),
+      player_data: player_token.into_data(),
       game_mediator,
+      send_player_action,
+
+      game_state: GameState::Registration,
+      action_sent: false,
+      player_killed: false,
     }
   }
 
@@ -35,33 +55,27 @@ impl WebsocketActor {
       Err(e) => log::error!("Failed to serialize JSON data: {}", e),
     }
   }
-}
 
-/// Close the websocket connection due to an error
-#[derive(Message)]
-#[rtype(result = "()")]
-struct FatalErrorClose(CloseCode, Option<String>);
+  /// Send an error message back to the clinet
+  fn send_error(error: impl Into<ServiceError>, ctx: &mut <Self as Actor>::Context) {
+    let error = error.into().get_error_response();
+    log::warn!("{}", error.get_description());
 
-/// Send back an error response, but keep the websocket open
-#[derive(Message)]
-#[rtype(result = "()")]
-struct NonFatalError {
-  message: String,
-  developer_notes: Option<String>,
-}
-
-impl From<CloseCode> for FatalErrorClose {
-  fn from(code: CloseCode) -> Self {
-    Self(code, None)
+    Self::send_json(&error, ctx);
   }
-}
 
-impl<T> From<(CloseCode, T)> for FatalErrorClose
-where
-  T: Into<String>,
-{
-  fn from((code, description): (CloseCode, T)) -> Self {
-    Self(code, Some(description.into()))
+  /// Send a fatal error message and stop the actor
+  fn fatal_error(error: impl Into<ServiceError>, close_code: CloseCode, ctx: &mut <Self as Actor>::Context) {
+    let error = error.into().get_error_response();
+    log::error!(
+      "Closing websocket: {} (Code {:#?})",
+      error.get_description(),
+      close_code
+    );
+
+    Self::send_json(&error, ctx);
+    ctx.close(Some(CloseReason::from((close_code, error.get_description().clone()))));
+    ctx.stop();
   }
 }
 
@@ -71,9 +85,9 @@ where
 impl Actor for WebsocketActor {
   type Context = ws::WebsocketContext<Self>;
 
-  fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
+  fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
     // Remove all references to this actor
-    self.game_mediator.do_send(Disconnect(self.player_id));
+    self.game_mediator.do_send(Disconnect(self.player_id, ctx.address()));
     Running::Stop
   }
 }
@@ -83,11 +97,9 @@ impl Actor for WebsocketActor {
 ///
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
   fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-    let self_addr = ctx.address();
-
     log::debug!("Received message: {:#?}", msg);
     let msg: ws::Message = match msg {
-      Err(e) => return self_addr.do_send(FatalErrorClose::from((CloseCode::Error, format!("{}", e)))),
+      Err(e) => return Self::send_error(WebsocketError::ProtocolError(e), ctx),
       Ok(msg) => msg,
     };
 
@@ -104,32 +116,27 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
       },
 
       // Parse JSON message
-      ws::Message::Text(text) => match serde_json::from_str::<serde_json::Value>(&text) {
-        Err(e) => {
-          return self_addr.do_send(NonFatalError {
-            message: "Invalid JSON data".into(),
-            developer_notes: Some(format!("{}", e)),
-          })
-        },
+      ws::Message::Text(text) => match serde_json::from_str::<WebsocketMessage>(&text) {
+        Err(e) => return Self::send_error(WebsocketError::JSONError(e), ctx),
         Ok(json) => json,
       },
 
       // Unsupported messages
       ws::Message::Binary(_) => {
-        return self_addr.do_send(NonFatalError {
-          message: "Unsupported Frame: Binary Data".into(),
-          developer_notes: None,
-        })
+        return Self::send_error(WebsocketError::UnsupportedFrameType("Binary".into()), ctx);
       },
       ws::Message::Continuation(_) => {
-        return self_addr.do_send(NonFatalError {
-          message: "Unsupported Frame: Continuation".into(),
-          developer_notes: None,
-        })
+        return Self::send_error(WebsocketError::UnsupportedFrameType("Continuation".into()), ctx);
       },
     };
 
-    Self::send_json(&json, ctx);
+    match json {
+      WebsocketMessage::Register => self.register(ctx),
+      WebsocketMessage::Unregister => self.unregister(ctx),
+      WebsocketMessage::Move(action) => self.do_action(action.transpose(), ctx),
+      WebsocketMessage::Attack(action) => self.do_action(action.transpose(), ctx),
+      WebsocketMessage::DropWeapon(action) => self.do_action(action.transpose(), ctx),
+    }
   }
 
   fn finished(&mut self, ctx: &mut Self::Context) {
@@ -138,52 +145,162 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
   }
 }
 
-//
-// Handle websocket errors
-//
-impl Handler<FatalErrorClose> for WebsocketActor {
-  type Result = ();
-
-  fn handle(&mut self, FatalErrorClose(code, description): FatalErrorClose, ctx: &mut Self::Context) -> Self::Result {
-    if let Some(ref description) = description {
-      log::error!("Closing websocket: {} (Code {:#?})", description, code);
-    } else {
-      log::error!("Closing websocket: code {:#?}", code);
-    }
-
-    ctx.close(Some(CloseReason { code, description }));
-    ctx.stop();
-  }
-}
-
-impl Handler<NonFatalError> for WebsocketActor {
-  type Result = ();
-
-  fn handle(&mut self, error: NonFatalError, ctx: &mut Self::Context) -> Self::Result {
-    if let Some(ref developer_notes) = error.developer_notes {
-      log::error!("{}: {}", error.message, developer_notes);
-    } else {
-      log::error!("{}", error.message);
-    }
-
-    Self::send_json(
-      &ErrorResponse::new(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        error.message,
-        GlobalErrorCode::WebsocketError,
-        error.developer_notes.unwrap_or_default(),
-      ),
-      ctx,
-    );
-  }
-}
-
 impl Handler<ConnectResponse> for WebsocketActor {
   type Result = ();
 
   fn handle(&mut self, response: ConnectResponse, ctx: &mut Self::Context) -> Self::Result {
-    if response != ConnectResponse::Ok {
-      ctx.close(Some(CloseCode::Abnormal.into()))
+    match response {
+      ConnectResponse::Ok(state) => {
+        self.game_state = state;
+      },
+      _ => ctx.close(Some(CloseCode::Abnormal.into())),
+    }
+  }
+}
+
+impl Handler<GameEngineCrash> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, _: GameEngineCrash, ctx: &mut Self::Context) -> Self::Result {
+    Self::fatal_error(ServiceError::GameEngineCrash, CloseCode::Error, ctx);
+  }
+}
+
+impl Handler<RegistrationUpdate> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, update: RegistrationUpdate, ctx: &mut Self::Context) -> Self::Result {
+    ctx.text(update.0);
+  }
+}
+
+impl Handler<KickUnregisteredPlayer> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, _: KickUnregisteredPlayer, ctx: &mut Self::Context) -> Self::Result {
+    Self::fatal_error(ServiceError::NotRegistered(self.player_id), CloseCode::Error, ctx);
+  }
+}
+
+impl Handler<GameStarting> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, starting: GameStarting, ctx: &mut Self::Context) -> Self::Result {
+    self.game_state = GameState::Initializing;
+    ctx.text(starting.0)
+  }
+}
+
+impl Handler<Init> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, init: Init, ctx: &mut Self::Context) -> Self::Result {
+    self.game_state = GameState::Running;
+    self.action_sent = false;
+    self.player_killed = false;
+
+    ctx.text(init.0)
+  }
+}
+
+impl Handler<NextState> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, state: NextState, ctx: &mut Self::Context) -> Self::Result {
+    self.action_sent = false;
+    ctx.text(state.0)
+  }
+}
+
+impl Handler<PlayerKilled> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, player_killed: PlayerKilled, ctx: &mut Self::Context) -> Self::Result {
+    if player_killed.0 == self.player_id {
+      self.player_killed = true;
+    }
+    ctx.text(player_killed.1)
+  }
+}
+
+impl Handler<GameEnded> for WebsocketActor {
+  type Result = ();
+
+  fn handle(&mut self, game_ended: GameEnded, ctx: &mut Self::Context) -> Self::Result {
+    self.game_state = GameState::Registration;
+    ctx.text(game_ended.0)
+  }
+}
+
+impl WebsocketActor {
+  fn register(&self, ctx: &mut <Self as Actor>::Context) {
+    // Spawn a future to process the request
+    ctx.spawn(
+      wrap_future::<_, Self>(self.game_mediator.send(Register {
+        id: self.player_id,
+        data: self.player_data.clone(),
+      }))
+      .map(|result, this, ctx| match result {
+        Ok(true) => {},
+        Ok(false) => Self::send_error(ServiceError::FailedToRegister(this.player_id), ctx),
+        Err(e) => Self::send_error(ServiceError::WebsocketMailboxError(e), ctx),
+      }),
+    );
+  }
+
+  fn unregister(&self, ctx: &mut <Self as Actor>::Context) {
+    // Spawn a future to process the request
+    ctx.spawn(
+      wrap_future::<_, Self>(self.game_mediator.send(Unregister { id: self.player_id })).map(|result, this, ctx| {
+        match result {
+          Ok(true) => {},
+          Ok(false) => Self::send_error(ServiceError::FailedToUnregister(this.player_id), ctx),
+          Err(e) => Self::send_error(ServiceError::WebsocketMailboxError(e), ctx),
+        }
+      }),
+    );
+  }
+
+  fn do_action(&mut self, action: PlayerAction, ctx: &mut <Self as Actor>::Context) {
+    if self.player_killed {
+      return Self::send_error(
+        ServiceError::CannotSendAction {
+          why: "player has been killed".into(),
+        },
+        ctx,
+      );
+    }
+
+    if !self.game_state.can_send_action() {
+      return Self::send_error(
+        ServiceError::CannotSendAction {
+          why: "game has not started yet".into(),
+        },
+        ctx,
+      );
+    }
+
+    if self.action_sent {
+      return Self::send_error(
+        ServiceError::CannotSendAction {
+          why: "already sent player action".into(),
+        },
+        ctx,
+      );
+    }
+
+    match self.send_player_action.send((self.player_id, action)) {
+      Ok(_) => {
+        self.action_sent = true;
+      },
+      Err(_) => {
+        return Self::send_error(
+          ServiceError::CannotSendAction {
+            why: "channel error".into(),
+          },
+          ctx,
+        );
+      },
     }
   }
 }

@@ -55,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
       .app_data(web::Data::new(JWTSecret::new(config::get_jwt_secret())))
       // Game mediator actor
       .app_data(web::Data::new(game_mediator.clone()))
+      // MPSC channel for sending player actions
+      .app_data(web::Data::new(send_player_actions.clone()))
       // Enable logger
       .wrap(middleware::Logger::default())
       // Configure error handlers

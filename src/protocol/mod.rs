@@ -3,19 +3,28 @@
 //
 pub mod actions;
 pub mod game;
+pub mod registration;
+pub mod tagged_request;
+pub mod websocket;
 
 pub use actions::PlayerAction;
 pub use game::GameStateUpdate;
+pub use registration::RegistrationUpdateEnum;
+pub use tagged_request::TaggedRequest;
+pub use websocket::WebsocketMessage;
 
-use serde::{Deserialize, Serialize};
+use bytestring::ByteString;
+use serde::Serialize;
 
-/// Every request can include an optional tag, used by the clients
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProtocolRequest<T> {
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub tag: Option<String>,
+pub trait ToBytestring {
+  fn to_bytestring(&self) -> serde_json::Result<ByteString>;
+}
 
-  #[serde(flatten)]
-  pub data: T,
+impl<T> ToBytestring for T
+where
+  T: Serialize,
+{
+  fn to_bytestring(&self) -> serde_json::Result<ByteString> {
+    Ok(serde_json::to_string(&self)?.into())
+  }
 }

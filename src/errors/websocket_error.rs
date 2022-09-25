@@ -16,6 +16,7 @@ pub enum WebsocketError {
   ProtocolError(WsProtocolError),
   JSONError(serde_json::Error),
   UnexpectedFrame(Frame),
+  UnsupportedFrameType(String),
   WebsocketClosed,
   ResponseError(ErrorResponse),
   UnknownError(StatusCode),

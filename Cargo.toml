@@ -14,6 +14,7 @@ actix-web-actors = "4.1.0"
 actix-web-httpauth = "0.8.0"
 anyhow = "1.0.65"
 awc = { version = "3.0.1", features = ["rustls"] }
+bytestring = "1"
 chrono = "0.4.22"
 chrono-english = "0.1"
 dotenv = "0.15.0"

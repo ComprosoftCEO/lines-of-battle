@@ -1,8 +1,8 @@
-use crate::protocol::ProtocolRequest;
+use crate::protocol::TaggedRequest;
 use serde::{Deserialize, Serialize};
 
 /// PlayerAction with an optional associated tag
-pub type PlayerAction = ProtocolRequest<PlayerActionEnum>;
+pub type PlayerAction = TaggedRequest<PlayerActionEnum>;
 
 /// Enum of the actual actions taken
 #[derive(Debug, Clone, Serialize, Deserialize)]

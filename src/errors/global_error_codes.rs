@@ -13,7 +13,11 @@ pub enum GlobalErrorCode {
   StructValidationError,
   InvalidJWTToken,
   GameEngineError,
+  GameEngineCrash,
   WebsocketError,
   NotRegistered,
+  FailedToRegister,
+  FailedToUnregister,
   AlreadyConnected,
+  CannotSendAction,
 }

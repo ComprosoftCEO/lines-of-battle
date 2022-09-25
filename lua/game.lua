@@ -78,9 +78,9 @@ function Update(ctx, actions)
   -- Perform the player actions in order
   --  Rust guarantees these follow the right input format
   for _, player in ipairs(playerOrder) do
-    -- Make sure player specified an action
+    -- Make sure player specified an action and is still alive
     local action = actions[player]
-    if action == nil then goto continue end
+    if (action == nil) or (playerDetails[player] == nil) then goto continue end
 
     if action.type == "move" then
       movePlayer(player, action.direction)

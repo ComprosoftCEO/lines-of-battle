@@ -1,41 +1,64 @@
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::errors::GlobalErrorCode;
 
-/// JSON response returned to the frontend on an error
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
+/// JSON response returned on an error
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+  rename_all = "camelCase",
+  into = "WrappedErrorResponse",
+  from = "WrappedErrorResponse"
+)]
 pub struct ErrorResponse {
-  #[serde(
-    serialize_with = "serialize_status_code",
-    deserialize_with = "deserialize_status_code"
-  )]
   status_code: StatusCode,
   description: String,
   error_code: GlobalErrorCode,
-
-  // Don't serialize on production system
-  #[cfg_attr(not(debug_assertions), serde(skip_serializing))]
-  #[serde(skip_serializing_if = "Option::is_none")]
   developer_notes: Option<String>,
 }
 
-fn serialize_status_code<S>(code: &StatusCode, serializer: S) -> Result<S::Ok, S::Error>
-where
-  S: Serializer,
-{
-  serializer.serialize_u16(code.as_u16())
+/// Helper type so the JSON has the `"type": "error"` JSON tag
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum WrappedErrorResponse {
+  #[serde(rename_all = "camelCase")]
+  Error {
+    description: String,
+    error_code: GlobalErrorCode,
+
+    // Don't serialize on production system
+    #[cfg_attr(not(debug_assertions), serde(skip_serializing))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    developer_notes: Option<String>,
+  },
 }
 
-fn deserialize_status_code<'de, D>(deserializer: D) -> Result<StatusCode, D::Error>
-where
-  D: Deserializer<'de>,
-{
-  let integer: u16 = Deserialize::deserialize(deserializer)?;
-  StatusCode::from_u16(integer).map_err(D::Error::custom)
+impl From<WrappedErrorResponse> for ErrorResponse {
+  fn from(error: WrappedErrorResponse) -> Self {
+    match error {
+      WrappedErrorResponse::Error {
+        description,
+        error_code,
+        developer_notes,
+      } => Self {
+        status_code: StatusCode::INTERNAL_SERVER_ERROR,
+        description,
+        error_code,
+        developer_notes,
+      },
+    }
+  }
+}
+
+impl From<ErrorResponse> for WrappedErrorResponse {
+  fn from(error: ErrorResponse) -> Self {
+    Self::Error {
+      description: error.description,
+      error_code: error.error_code,
+      developer_notes: error.developer_notes,
+    }
+  }
 }
 
 impl ErrorResponse {

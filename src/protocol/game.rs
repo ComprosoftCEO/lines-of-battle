@@ -1,7 +1,6 @@
 use actix::prelude::*;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::protocol::PlayerAction;
@@ -13,15 +12,12 @@ use crate::protocol::PlayerAction;
 pub enum GameStateUpdate {
   /// Game has just been initialized (returns the initial game state)
   #[serde(rename_all = "camelCase")]
-  Init {
-    game_state: serde_json::Value,
-    seconds_left: u32,
-  },
+  Init { game_state: GameState, seconds_left: u32 },
 
   /// Game has been updated
   #[serde(rename_all = "camelCase")]
   NextState {
-    game_state: serde_json::Value,
+    game_state: GameState,
     actions_taken: HashMap<Uuid, PlayerAction>,
     seconds_left: u32,
   },
@@ -34,7 +30,15 @@ pub enum GameStateUpdate {
   #[serde(rename_all = "camelCase")]
   GameEnded {
     winners: HashSet<Uuid>,
-    game_state: serde_json::Value,
+    game_state: GameState,
     actions_taken: HashMap<Uuid, PlayerAction>,
   },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameState {
+  playfield: Vec<Vec<u32>>,
+  players: HashMap<Uuid, serde_json::Map<String, serde_json::Value>>,
+  weapons: Vec<serde_json::Map<String, serde_json::Value>>,
 }
