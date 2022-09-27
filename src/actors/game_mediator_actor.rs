@@ -1,14 +1,12 @@
 use actix::prelude::*;
-use bytestring::ByteString;
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::actors::{mediator_messages::*, shared_messages::*, websocket_messages::*, WebsocketActor};
+use crate::actors::{mediator_messages::*, shared_messages::*, WebsocketActor};
 use crate::game::GameState;
 use crate::jwt::JWTPlayerData;
-use crate::protocol::{GameStateUpdate, RegistrationUpdateEnum, ToBytestring};
 
 const MIN_PLAYERS_NEEDED: usize = 2;
 const LOBBY_WAIT_SECS: u32 = 10;
@@ -24,6 +22,7 @@ pub struct GameMediatorActor {
 }
 
 impl GameMediatorActor {
+  /// Construct a new game mediator actor with the given channel
   pub fn new(send_start_game: Sender<Vec<Uuid>>) -> Self {
     Self {
       game_state: GameState::Registration,
@@ -35,22 +34,52 @@ impl GameMediatorActor {
     }
   }
 
-  /// Broadcast a message
-  ///
-  /// Works for types that wrap a ByteString to make copying efficient
-  fn broadcast_all_bytestring<M, F>(&self, bytestring: ByteString, wrap: F)
+  /// Broadcast a message - Should accept a type that can be easily cloned
+  fn broadcast_all<M>(&self, data: M)
   where
-    F: Fn(ByteString) -> M,
-    M: Message + Send + 'static,
+    M: Clone + Message + Send + 'static,
     <M as actix::Message>::Result: Send,
     WebsocketActor: Handler<M>,
   {
     for (_, actor) in self.actors.iter() {
-      actor.do_send(wrap(bytestring.clone()));
+      actor.do_send(data.clone());
     }
   }
 
-  fn try_registration_update(&mut self) {
+  /// Send an update with the latest registration details
+  fn broadcast_registration_update(&self) {
+    if self.registered.len() < self.min_players_needed {
+      self.broadcast_all(RegistrationUpdate::waiting_on_players(
+        self.registered.clone(),
+        self.min_players_needed,
+      ));
+    } else {
+      self.broadcast_all(RegistrationUpdate::game_starting_soon(
+        self.registered.clone(),
+        self.min_players_needed,
+        self.secs_left,
+      ));
+    };
+  }
+}
+
+///
+/// Make GameMediatorActor into an actor that can run in the background
+///
+impl Actor for GameMediatorActor {
+  type Context = Context<Self>;
+
+  fn started(&mut self, ctx: &mut Self::Context) {
+    ctx.run_interval(Duration::from_secs(1), |this, _ctx| this.tick_registration_update());
+  }
+}
+
+//
+// Handle registration "tick" logic
+//
+impl GameMediatorActor {
+  /// Run once every second to update the registration state
+  fn tick_registration_update(&mut self) {
     if self.game_state != GameState::Registration {
       return;
     }
@@ -59,6 +88,7 @@ impl GameMediatorActor {
       return;
     }
 
+    // Count down the number of seconds
     self.secs_left -= 1;
     if self.secs_left == 0 {
       // Lobby time is up! Start the game now!
@@ -66,23 +96,7 @@ impl GameMediatorActor {
     }
 
     // Send an update that the game is starting soon...
-    self.send_registration_update();
-  }
-
-  fn send_registration_update(&self) {
-    let registration_update = if self.registered.len() < self.min_players_needed {
-      RegistrationUpdateEnum::WaitingOnPlayers {
-        players: self.registered.clone(),
-        min_players_needed: self.min_players_needed,
-      }
-    } else {
-      RegistrationUpdateEnum::GameStartingSoon {
-        players: self.registered.clone(),
-        min_players_needed: self.min_players_needed,
-        seconds_left: self.secs_left,
-      }
-    };
-    self.broadcast_all_bytestring(registration_update.to_bytestring().unwrap(), RegistrationUpdate);
+    self.broadcast_registration_update();
   }
 
   fn start_game(&mut self) {
@@ -91,25 +105,10 @@ impl GameMediatorActor {
     self.game_state = GameState::Initializing;
 
     // Notify all players that game is starting
-    self.broadcast_all_bytestring(
-      RegistrationUpdateEnum::GameStarting {
-        player_order: player_order.clone(),
-      }
-      .to_bytestring()
-      .unwrap(),
-      GameStarting,
-    );
+    self.broadcast_all(GameStarting::new(self.registered.clone(), player_order.clone()));
 
     // Send the message for the game engine to start
     self.send_start_game.send(player_order).ok();
-  }
-}
-
-impl Actor for GameMediatorActor {
-  type Context = Context<Self>;
-
-  fn started(&mut self, ctx: &mut Self::Context) {
-    ctx.run_interval(Duration::from_secs(1), |this, _ctx| this.try_registration_update());
   }
 }
 
@@ -162,7 +161,7 @@ impl Handler<Register> for GameMediatorActor {
     }
 
     // Broadcast the update
-    self.send_registration_update();
+    self.broadcast_registration_update();
 
     true
   }
@@ -180,32 +179,44 @@ impl Handler<Unregister> for GameMediatorActor {
     self.registered.remove(&id);
 
     // Broadcast the update
-    self.send_registration_update();
+    self.broadcast_registration_update();
 
     true
   }
 }
 
-impl Handler<GameStateUpdate> for GameMediatorActor {
+impl Handler<Init> for GameMediatorActor {
   type Result = ();
 
-  fn handle(&mut self, update: GameStateUpdate, _: &mut Self::Context) -> Self::Result {
-    let bytestring = update.to_bytestring().unwrap();
-    match update {
-      GameStateUpdate::Init { .. } => {
-        self.game_state = GameState::Running;
-        self.broadcast_all_bytestring(bytestring, Init);
-      },
-      GameStateUpdate::NextState { .. } => self.broadcast_all_bytestring(bytestring, NextState),
-      GameStateUpdate::PlayerKilled { id, .. } => {
-        self.broadcast_all_bytestring(bytestring, |bytestring| PlayerKilled(id, bytestring))
-      },
-      GameStateUpdate::GameEnded { .. } => {
-        self.registered.clear();
-        self.broadcast_all_bytestring(bytestring, GameEnded);
-        self.game_state = GameState::Registration;
-      },
-    }
+  fn handle(&mut self, init: Init, _: &mut Self::Context) -> Self::Result {
+    self.game_state = GameState::Running;
+    self.broadcast_all(init);
+  }
+}
+
+impl Handler<NextState> for GameMediatorActor {
+  type Result = ();
+
+  fn handle(&mut self, next_state: NextState, _: &mut Self::Context) -> Self::Result {
+    self.broadcast_all(next_state);
+  }
+}
+
+impl Handler<PlayerKilled> for GameMediatorActor {
+  type Result = ();
+
+  fn handle(&mut self, player_killed: PlayerKilled, _: &mut Self::Context) -> Self::Result {
+    self.broadcast_all(player_killed);
+  }
+}
+
+impl Handler<GameEnded> for GameMediatorActor {
+  type Result = ();
+
+  fn handle(&mut self, game_ended: GameEnded, _: &mut Self::Context) -> Self::Result {
+    self.registered.clear();
+    self.game_state = GameState::Registration;
+    self.broadcast_all(game_ended);
   }
 }
 

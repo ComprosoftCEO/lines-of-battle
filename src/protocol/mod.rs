@@ -8,7 +8,7 @@ pub mod tagged_request;
 pub mod websocket;
 
 pub use actions::PlayerAction;
-pub use game::GameStateUpdate;
+pub use game::{GameState, GameStateUpdate};
 pub use registration::RegistrationUpdateEnum;
 pub use tagged_request::TaggedRequest;
 pub use websocket::WebsocketMessage;
@@ -16,15 +16,25 @@ pub use websocket::WebsocketMessage;
 use bytestring::ByteString;
 use serde::Serialize;
 
+/// Helpful trait to convert a serializable type into a ByteString
 pub trait ToBytestring {
-  fn to_bytestring(&self) -> serde_json::Result<ByteString>;
+  /// Serialize the object into a bytestring
+  fn to_bytestring(&self) -> ByteString;
+
+  /// Consume the object and convert into a bytestring
+  fn into_bytestring(self) -> ByteString
+  where
+    Self: Sized,
+  {
+    self.to_bytestring()
+  }
 }
 
 impl<T> ToBytestring for T
 where
   T: Serialize,
 {
-  fn to_bytestring(&self) -> serde_json::Result<ByteString> {
-    Ok(serde_json::to_string(&self)?.into())
+  fn to_bytestring(&self) -> ByteString {
+    serde_json::to_string(&self).unwrap().into()
   }
 }

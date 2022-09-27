@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::actions::*;
 
-/// Every request can include an optional tag, used by the clients
+/// Some requests can include an optional tag, used by the clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaggedRequest<T> {
@@ -14,6 +14,7 @@ pub struct TaggedRequest<T> {
 }
 
 impl TaggedRequest<MoveAction> {
+  /// Move the tag to an outside data structure
   pub fn transpose(self) -> TaggedRequest<PlayerActionEnum> {
     TaggedRequest {
       tag: self.tag,
@@ -23,6 +24,7 @@ impl TaggedRequest<MoveAction> {
 }
 
 impl TaggedRequest<AttackAction> {
+  /// Move the tag to an outside data structure
   pub fn transpose(self) -> TaggedRequest<PlayerActionEnum> {
     TaggedRequest {
       tag: self.tag,
@@ -31,7 +33,8 @@ impl TaggedRequest<AttackAction> {
   }
 }
 
-impl TaggedRequest<Option<()>> {
+impl TaggedRequest<DropWeaponAction> {
+  /// Move the tag to an outside data structure
   pub fn transpose(self) -> TaggedRequest<PlayerActionEnum> {
     TaggedRequest {
       tag: self.tag,

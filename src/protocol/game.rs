@@ -1,13 +1,12 @@
-use actix::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JSONMap, Value as JSONValue};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::protocol::PlayerAction;
 
 /// Notify the mediator that the game state has been updated
-#[derive(Debug, Clone, Serialize, Message)]
-#[rtype(result = "()")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum GameStateUpdate {
   /// Game has just been initialized (returns the initial game state)
@@ -45,13 +44,13 @@ pub struct GameState {
 
   /// Map of player ID to details
   #[serde(default)]
-  players: HashMap<Uuid, serde_json::Map<String, serde_json::Value>>,
+  players: HashMap<Uuid, JSONMap<String, JSONValue>>,
 
   /// List of weapons in the arena
   #[serde(default)]
-  weapons: Vec<serde_json::Map<String, serde_json::Value>>,
+  weapons: Vec<JSONMap<String, JSONValue>>,
 
   /// List of items in the arena
   #[serde(default)]
-  items: Vec<serde_json::Map<String, serde_json::Value>>,
+  items: Vec<JSONMap<String, JSONValue>>,
 }

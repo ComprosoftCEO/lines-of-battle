@@ -13,7 +13,7 @@ use crate::actors::{mediator_messages::*, shared_messages::*, websocket_messages
 use crate::errors::{ServiceError, WebsocketError};
 use crate::game::GameState;
 use crate::jwt::{JWTPlayerData, PlayerToken};
-use crate::protocol::{PlayerAction, WebsocketMessage};
+use crate::protocol::{PlayerAction, ToBytestring, WebsocketMessage};
 
 /// Actor used for managing the websocket communication
 pub struct WebsocketActor {
@@ -170,7 +170,7 @@ impl Handler<RegistrationUpdate> for WebsocketActor {
   type Result = ();
 
   fn handle(&mut self, update: RegistrationUpdate, ctx: &mut Self::Context) -> Self::Result {
-    ctx.text(update.0);
+    ctx.text(update.into_bytestring());
   }
 }
 
@@ -187,7 +187,7 @@ impl Handler<GameStarting> for WebsocketActor {
 
   fn handle(&mut self, starting: GameStarting, ctx: &mut Self::Context) -> Self::Result {
     self.game_state = GameState::Initializing;
-    ctx.text(starting.0)
+    ctx.text(starting.into_bytestring())
   }
 }
 
@@ -199,7 +199,7 @@ impl Handler<Init> for WebsocketActor {
     self.action_sent = false;
     self.player_killed = false;
 
-    ctx.text(init.0)
+    ctx.text(init.into_bytestring())
   }
 }
 
@@ -208,7 +208,7 @@ impl Handler<NextState> for WebsocketActor {
 
   fn handle(&mut self, state: NextState, ctx: &mut Self::Context) -> Self::Result {
     self.action_sent = false;
-    ctx.text(state.0)
+    ctx.text(state.into_bytestring())
   }
 }
 
@@ -216,10 +216,10 @@ impl Handler<PlayerKilled> for WebsocketActor {
   type Result = ();
 
   fn handle(&mut self, player_killed: PlayerKilled, ctx: &mut Self::Context) -> Self::Result {
-    if player_killed.0 == self.player_id {
+    if player_killed.get_player_id() == self.player_id {
       self.player_killed = true;
     }
-    ctx.text(player_killed.1)
+    ctx.text(player_killed.into_bytestring())
   }
 }
 
@@ -228,7 +228,7 @@ impl Handler<GameEnded> for WebsocketActor {
 
   fn handle(&mut self, game_ended: GameEnded, ctx: &mut Self::Context) -> Self::Result {
     self.game_state = GameState::Registration;
-    ctx.text(game_ended.0)
+    ctx.text(game_ended.into_bytestring())
   }
 }
 

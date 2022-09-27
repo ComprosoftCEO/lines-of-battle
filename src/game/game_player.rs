@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::actors::{shared_messages::*, GameMediatorActor};
 use crate::errors::GameEngineError;
-use crate::protocol::{game::GameState, GameStateUpdate, PlayerAction};
+use crate::protocol::{game::GameState, PlayerAction};
 
 const SECONDS_PER_GAME: u32 = 60 * 3;
 const MAX_TRIES: usize = 5;
@@ -130,10 +130,7 @@ impl GamePlayer {
 
       // Initialize the game!
       let initial_state = Self::trap_errors(MAX_TRIES, || self.init_game(&player_order))?;
-      self.mediator_addr.do_send(GameStateUpdate::Init {
-        game_state: initial_state,
-        seconds_left: self.seconds_left,
-      });
+      self.mediator_addr.do_send(Init::new(initial_state, self.seconds_left));
 
       // Run until there is no time left
       while self.seconds_left > 0 {
@@ -156,17 +153,15 @@ impl GamePlayer {
 
         // Notify the mediator of the change
         if self.seconds_left > 0 {
-          self.mediator_addr.do_send(GameStateUpdate::NextState {
-            game_state: next_state,
-            actions_taken: player_actions,
-            seconds_left: self.seconds_left,
-          });
+          self
+            .mediator_addr
+            .do_send(NextState::new(next_state, player_actions, self.seconds_left));
         } else {
-          self.mediator_addr.do_send(GameStateUpdate::GameEnded {
-            winners: self.players_remaining.lock().unwrap().clone(),
-            game_state: next_state,
-            actions_taken: player_actions,
-          });
+          self.mediator_addr.do_send(GameEnded::new(
+            self.players_remaining.lock().unwrap().clone(),
+            next_state,
+            player_actions,
+          ));
         }
       }
     }
@@ -263,13 +258,13 @@ impl GamePlayer {
 impl LuaUserData for GamePlayerUserData {
   fn add_methods<'lua, M: LuaUserDataMethods<'lua, Self>>(methods: &mut M) {
     methods.add_method("notifyPlayerKilled", |_, this, uuid: String| {
-      let uuid: Uuid = Uuid::from_str(&uuid).map_err(|_| LuaError::RuntimeError("Invalid UUID".into()))?;
+      let player_id: Uuid = Uuid::from_str(&uuid).map_err(|_| LuaError::RuntimeError("Invalid UUID".into()))?;
 
       // Update the internal list of players remaining
-      this.players_remaining.lock().unwrap().remove(&uuid);
+      this.players_remaining.lock().unwrap().remove(&player_id);
 
       // Also notify the mediator
-      this.mediator_addr.do_send(GameStateUpdate::PlayerKilled { id: uuid });
+      this.mediator_addr.do_send(PlayerKilled::new(player_id));
 
       Ok(())
     });

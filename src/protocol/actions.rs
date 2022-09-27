@@ -36,3 +36,8 @@ pub struct MoveAction {
 pub struct AttackAction {
   pub direction: Direction,
 }
+
+/// Drop a weapon - Just declare an empty struct
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DropWeaponAction {}

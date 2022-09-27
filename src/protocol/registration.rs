@@ -18,6 +18,7 @@ pub enum RegistrationUpdateEnum {
   },
 
   /// Game has minimum number of players and will start soon
+  #[serde(rename_all = "camelCase")]
   GameStartingSoon {
     players: HashMap<Uuid, JWTPlayerData>,
     min_players_needed: usize,
@@ -25,5 +26,9 @@ pub enum RegistrationUpdateEnum {
   },
 
   /// Game is starting NOW!
-  GameStarting { player_order: Vec<Uuid> },
+  #[serde(rename_all = "camelCase")]
+  GameStarting {
+    players: HashMap<Uuid, JWTPlayerData>,
+    player_order: Vec<Uuid>,
+  },
 }
