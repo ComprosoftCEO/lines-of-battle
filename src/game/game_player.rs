@@ -58,7 +58,7 @@ impl GamePlayer {
         if let Some(parent_dir) = parent_dir.join("?.lua").to_str() {
           log::debug!("Adding directory '{}' to Lua path", parent_dir);
           if let Err(e) = ctx
-            .load(&format!(r#"package.path = "{};" .. package.path"#, parent_dir))
+            .load(&format!(r#"package.path = [[{};]] .. package.path"#, parent_dir))
             .exec()
           {
             log::warn!("Failed to update the Lua path: {}", e);
