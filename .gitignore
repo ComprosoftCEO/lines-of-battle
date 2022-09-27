@@ -6,5 +6,6 @@
 # Environment Files
 .env*
 
-# Test JavaScript files
+# Test client files
 *.js
+*.py
