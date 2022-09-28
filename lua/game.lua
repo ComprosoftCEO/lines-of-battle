@@ -30,6 +30,7 @@ function Init(ctx, players)
   pf, pfRows, pfCols = libPlayfield.newPlayfield(10, 10)
 
   -- Insert players into random positions in the playfield
+  playerDetails = {}
   for _, player in ipairs(players) do
     local row, col
     repeat
@@ -230,7 +231,7 @@ function tryHitPlayer(ctx, row, col, weapon)
       -- Attack the player
       player.health = math.max(player.health - damage, 0)
       if player.health <= 0 then
-        ctx.notifyPlayerKilled(playerID)
+        ctx:notifyPlayerKilled(playerID)
         playerDetails[playerID] = nil
       end
 

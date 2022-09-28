@@ -129,6 +129,7 @@ impl GamePlayer {
   /// Run the game and return a GameEngineError on a fatal error
   ///
   fn run_internal(&mut self) -> Result<(), GameEngineError> {
+    log::info!("Waiting for players to register for the game");
     loop {
       // Wait for the mediator to say the game is ready to start
       let player_order = match self.recv_start_game.recv() {
@@ -140,6 +141,7 @@ impl GamePlayer {
       };
 
       // Initialize the game!
+      log::info!("Initializing game engine...");
       let initial_state = Self::trap_errors(MAX_TRIES, || self.init_game(&player_order))?;
       self.mediator_addr.do_send(Init::new(initial_state, self.seconds_left));
 
@@ -148,6 +150,11 @@ impl GamePlayer {
         // Sleep for roughtly one second before running the next tick
         thread::sleep(Duration::from_secs(1));
         self.seconds_left -= 1;
+        log::info!(
+          "Game engine running - {} second{} remaining",
+          self.seconds_left,
+          if self.seconds_left == 1 { "" } else { "s" }
+        );
 
         // Read the list of player actions from the channel
         //  Filter any actions for players that have died (just to be extra safe)
@@ -175,6 +182,8 @@ impl GamePlayer {
           ));
         }
       }
+
+      log::info!("Game ended - waiting for players to register for next game");
     }
   }
 
