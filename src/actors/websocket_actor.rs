@@ -152,6 +152,9 @@ impl Handler<ConnectResponse> for WebsocketActor {
     match response {
       ConnectResponse::Ok(state) => {
         self.game_state = state;
+        if self.game_state == GameState::FatalError {
+          Self::fatal_error(ServiceError::GameEngineCrash, CloseCode::Error, ctx);
+        }
       },
       _ => ctx.close(Some(CloseCode::Abnormal.into())),
     }

@@ -117,23 +117,34 @@ impl GamePlayer {
     }
   }
 
+  /// A game round is running if:
+  ///
+  /// 1. There are 2 or more players left in the game
+  /// 2. AND there is time left on the clock
+  fn is_round_running(&self) -> bool {
+    self.seconds_left > 0 && self.players_remaining.lock().unwrap().len() > 1
+  }
+
   ///
   /// Run the game and return a GameEngineError on a fatal error
   ///
   fn run_internal(&mut self) -> Result<(), GameEngineError> {
     loop {
       // Wait for the mediator to say the game is ready to start
-      let player_order = self
-        .recv_start_game
-        .recv()
-        .map_err(|e| GameEngineError::ChannelClosed("start_game", e))?;
+      let player_order = match self.recv_start_game.recv() {
+        Ok(order) => order,
+        Err(_) => {
+          log::info!("Channel closed: 'start_game', stopping game engine...");
+          return Ok(());
+        },
+      };
 
       // Initialize the game!
       let initial_state = Self::trap_errors(MAX_TRIES, || self.init_game(&player_order))?;
       self.mediator_addr.do_send(Init::new(initial_state, self.seconds_left));
 
       // Run until there is no time left
-      while self.seconds_left > 0 {
+      while self.is_round_running() {
         // Sleep for roughtly one second before running the next tick
         thread::sleep(Duration::from_secs(1));
         self.seconds_left -= 1;
@@ -152,7 +163,7 @@ impl GamePlayer {
         let next_state = Self::trap_errors(MAX_TRIES, || self.tick_game(&player_actions))?;
 
         // Notify the mediator of the change
-        if self.seconds_left > 0 {
+        if self.is_round_running() {
           self
             .mediator_addr
             .do_send(NextState::new(next_state, player_actions, self.seconds_left));
@@ -167,7 +178,9 @@ impl GamePlayer {
     }
   }
 
+  ///
   /// Handle game initialization with the given player order
+  ///
   fn init_game(&mut self, player_order: &Vec<Uuid>) -> Result<GameState, GameEngineError> {
     // Initialize game player variables
     self.player_order = Arc::new(player_order.clone());
