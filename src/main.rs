@@ -64,7 +64,11 @@ async fn main() -> anyhow::Result<()> {
       .app_data(web::FormConfig::default().error_handler(|err, _req| ServiceError::from(err).into()))
       .app_data(web::PathConfig::default().error_handler(|err, _req| ServiceError::from(err).into()))
       .app_data(web::QueryConfig::default().error_handler(|err, _req| ServiceError::from(err).into()))
-      .service(web::scope("/api/v1/play").route("", web::get().to(handlers::connect_player)))
+      .service(
+        web::scope("/api/v1")
+          .route("/play", web::get().to(handlers::connect_player))
+          .route("/view", web::get().to(handlers::connect_viewer)),
+      )
       // Load all routes
       .default_service(web::route().to(|| HttpResponse::NotFound()))
   });

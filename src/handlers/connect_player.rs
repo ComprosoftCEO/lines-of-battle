@@ -18,7 +18,7 @@ pub async fn connect_player(
   req: HttpRequest,
   payload: web::Payload,
 ) -> Result<HttpResponse, ServiceError> {
-  let player_id = token.get_player_id();
+  let player_id = token.get_id();
   let player_name = token.get_data().get_name().clone();
 
   // Start the websocket actor to manage the communication

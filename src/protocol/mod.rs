@@ -3,15 +3,17 @@
 //
 pub mod actions;
 pub mod game;
+pub mod query;
 pub mod registration;
 pub mod tagged_request;
 pub mod websocket;
 
 pub use actions::PlayerAction;
 pub use game::{GameState, GameStateUpdate};
+pub use query::QueryResponse;
 pub use registration::RegistrationUpdateEnum;
 pub use tagged_request::TaggedRequest;
-pub use websocket::WebsocketMessage;
+pub use websocket::{ViewerMessage, WebsocketMessage};
 
 use bytestring::ByteString;
 use serde::Serialize;

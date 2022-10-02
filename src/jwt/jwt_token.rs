@@ -49,7 +49,7 @@ impl<A: Audience, T> JWTToken<A, T> {
     }
   }
 
-  pub fn get_player_id(&self) -> Uuid {
+  pub fn get_id(&self) -> Uuid {
     self.sub
   }
 

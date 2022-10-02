@@ -34,7 +34,7 @@ impl WebsocketActor {
     send_player_action: Sender<(Uuid, PlayerAction)>,
   ) -> Self {
     Self {
-      player_id: player_token.get_player_id(),
+      player_id: player_token.get_id(),
       player_data: player_token.into_data(),
       game_mediator,
       send_player_action,

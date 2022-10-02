@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 /// Represents the state transitions in the game engine
 ///
 /// ```text
@@ -7,7 +9,7 @@
 /// ```
 ///
 /// All states can go to a fatal error
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum GameState {
   Registration,
   Initializing,

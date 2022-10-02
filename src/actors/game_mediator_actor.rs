@@ -1,10 +1,10 @@
 use actix::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::actors::{mediator_messages::*, shared_messages::*, WebsocketActor};
+use crate::actors::{mediator_messages::*, shared_messages::*, ViewerActor, WebsocketActor};
 use crate::game::GameState;
 use crate::jwt::JWTPlayerData;
 
@@ -16,6 +16,7 @@ pub struct GameMediatorActor {
   game_state: GameState,
   registered: HashMap<Uuid, JWTPlayerData>, // Stores ID and other player data
   actors: HashMap<Uuid, Addr<WebsocketActor>>,
+  viewers: HashSet<Addr<ViewerActor>>,
   send_start_game: Sender<Vec<Uuid>>,
   min_players_needed: usize,
   secs_left: u32,
@@ -28,6 +29,7 @@ impl GameMediatorActor {
       game_state: GameState::Registration,
       registered: HashMap::new(),
       actors: HashMap::new(),
+      viewers: HashSet::new(),
       send_start_game,
       min_players_needed: MIN_PLAYERS_NEEDED,
       secs_left: LOBBY_WAIT_SECS,
@@ -40,9 +42,16 @@ impl GameMediatorActor {
     M: Clone + Message + Send + 'static,
     <M as actix::Message>::Result: Send,
     WebsocketActor: Handler<M>,
+    ViewerActor: Handler<M>,
   {
+    // Send to all actors
     for (_, actor) in self.actors.iter() {
       actor.do_send(data.clone());
+    }
+
+    // Also send to all viewers
+    for viewer in self.viewers.iter() {
+      viewer.do_send(data.clone());
     }
   }
 
@@ -139,6 +148,23 @@ impl Handler<Disconnect> for GameMediatorActor {
         self.actors.remove(&player_id);
       }
     }
+  }
+}
+
+impl Handler<ConnectViewer> for GameMediatorActor {
+  type Result = ConnectViewerResponse;
+
+  fn handle(&mut self, ConnectViewer(addr): ConnectViewer, _: &mut Self::Context) -> Self::Result {
+    self.viewers.insert(addr);
+    ConnectViewerResponse(self.game_state)
+  }
+}
+
+impl Handler<DisconnectViewer> for GameMediatorActor {
+  type Result = ();
+
+  fn handle(&mut self, DisconnectViewer(addr): DisconnectViewer, _: &mut Self::Context) -> Self::Result {
+    self.viewers.remove(&addr);
   }
 }
 
