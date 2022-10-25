@@ -10,16 +10,17 @@ use serde::{Deserialize, Serialize};
 ///
 /// All states can go to a fatal error
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum GameState {
+#[serde(rename_all = "camelCase")]
+pub enum ServerState {
   Registration,
   Initializing,
   Running,
   FatalError,
 }
 
-impl GameState {
+impl ServerState {
   pub fn can_change_registration(&self) -> bool {
-    use GameState::*;
+    use ServerState::*;
 
     match self {
       Registration => true,
@@ -28,7 +29,7 @@ impl GameState {
   }
 
   pub fn can_send_action(&self) -> bool {
-    use GameState::*;
+    use ServerState::*;
 
     match self {
       Running => true,

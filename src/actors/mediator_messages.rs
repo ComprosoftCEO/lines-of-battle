@@ -2,7 +2,7 @@ use actix::prelude::*;
 use uuid::Uuid;
 
 use crate::actors::{ViewerActor, WebsocketActor};
-use crate::game::GameState;
+use crate::game::ServerState;
 use crate::jwt::JWTPlayerData;
 
 /// Connect a websocket actor with the mediator
@@ -14,7 +14,7 @@ pub struct Connect(pub Uuid, pub Addr<WebsocketActor>);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Message, MessageResponse)]
 #[rtype(result = "()")]
 pub enum ConnectResponse {
-  Ok(GameState),
+  Ok(ServerState),
   NotRegistered,
   AlreadyConnected,
 }
@@ -32,7 +32,7 @@ pub struct ConnectViewer(pub Addr<ViewerActor>);
 /// Response from the viewer connection
 #[derive(Debug, Clone, Message, MessageResponse)]
 #[rtype(result = "()")]
-pub struct ConnectViewerResponse(pub GameState);
+pub struct ConnectViewerResponse(pub ServerState);
 
 /// Disconnect a viewer actor from the mediator
 #[derive(Debug, Clone, Message)]

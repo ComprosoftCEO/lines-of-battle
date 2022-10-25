@@ -11,9 +11,9 @@ use uuid::Uuid;
 
 use crate::actors::{mediator_messages::*, shared_messages::*, websocket_messages::*, GameMediatorActor};
 use crate::errors::{ServiceError, WebsocketError};
-use crate::game::GameState;
+use crate::game::ServerState;
 use crate::jwt::{JWTPlayerData, PlayerToken};
-use crate::protocol::{PlayerAction, ToBytestring, WebsocketMessage};
+use crate::protocol::{PlayerAction, QueryResponse, ToBytestring, WebsocketMessage};
 
 /// Actor used for managing the websocket communication
 pub struct WebsocketActor {
@@ -22,7 +22,7 @@ pub struct WebsocketActor {
   game_mediator: Addr<GameMediatorActor>,
   send_player_action: Sender<(Uuid, PlayerAction)>,
 
-  game_state: GameState,
+  server_state: ServerState,
   action_sent: bool,
   player_killed: bool,
 }
@@ -39,7 +39,7 @@ impl WebsocketActor {
       game_mediator,
       send_player_action,
 
-      game_state: GameState::Registration,
+      server_state: ServerState::Registration,
       action_sent: false,
       player_killed: false,
     }
@@ -133,6 +133,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
     match json {
       WebsocketMessage::Register => self.register(ctx),
       WebsocketMessage::Unregister => self.unregister(ctx),
+      WebsocketMessage::GetServerState => self.send_server_state(ctx),
       WebsocketMessage::Move(action) => self.do_action(action.transpose(), ctx),
       WebsocketMessage::Attack(action) => self.do_action(action.transpose(), ctx),
       WebsocketMessage::DropWeapon(action) => self.do_action(action.transpose(), ctx),
@@ -151,8 +152,8 @@ impl Handler<ConnectResponse> for WebsocketActor {
   fn handle(&mut self, response: ConnectResponse, ctx: &mut Self::Context) -> Self::Result {
     match response {
       ConnectResponse::Ok(state) => {
-        self.game_state = state;
-        if self.game_state == GameState::FatalError {
+        self.server_state = state;
+        if self.server_state == ServerState::FatalError {
           Self::fatal_error(ServiceError::GameEngineCrash, CloseCode::Error, ctx);
         }
       },
@@ -189,7 +190,7 @@ impl Handler<GameStarting> for WebsocketActor {
   type Result = ();
 
   fn handle(&mut self, starting: GameStarting, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Initializing;
+    self.server_state = ServerState::Initializing;
     ctx.text(starting.into_bytestring())
   }
 }
@@ -198,7 +199,7 @@ impl Handler<Init> for WebsocketActor {
   type Result = ();
 
   fn handle(&mut self, init: Init, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Running;
+    self.server_state = ServerState::Running;
     self.action_sent = false;
     self.player_killed = false;
 
@@ -230,7 +231,7 @@ impl Handler<GameEnded> for WebsocketActor {
   type Result = ();
 
   fn handle(&mut self, game_ended: GameEnded, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Registration;
+    self.server_state = ServerState::Registration;
     ctx.text(game_ended.into_bytestring())
   }
 }
@@ -264,6 +265,15 @@ impl WebsocketActor {
     );
   }
 
+  fn send_server_state(&self, ctx: &mut <Self as Actor>::Context) {
+    Self::send_json(
+      &QueryResponse::ServerState {
+        state: self.server_state,
+      },
+      ctx,
+    );
+  }
+
   fn do_action(&mut self, action: PlayerAction, ctx: &mut <Self as Actor>::Context) {
     if self.player_killed {
       return Self::send_error(
@@ -274,7 +284,7 @@ impl WebsocketActor {
       );
     }
 
-    if !self.game_state.can_send_action() {
+    if !self.server_state.can_send_action() {
       return Self::send_error(
         ServiceError::CannotSendAction {
           why: "game has not started yet".into(),

@@ -5,7 +5,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::actors::{mediator_messages::*, shared_messages::*, ViewerActor, WebsocketActor};
-use crate::game::GameState;
+use crate::game::ServerState;
 use crate::jwt::JWTPlayerData;
 
 const MIN_PLAYERS_NEEDED: usize = 2;
@@ -13,7 +13,7 @@ const LOBBY_WAIT_SECS: u32 = 10;
 
 /// Actor that facilitates communication between the websocket actors and the game engine
 pub struct GameMediatorActor {
-  game_state: GameState,
+  server_state: ServerState,
   registered: HashMap<Uuid, JWTPlayerData>, // Stores ID and other player data
   actors: HashMap<Uuid, Addr<WebsocketActor>>,
   viewers: HashSet<Addr<ViewerActor>>,
@@ -26,7 +26,7 @@ impl GameMediatorActor {
   /// Construct a new game mediator actor with the given channel
   pub fn new(send_start_game: Sender<Vec<Uuid>>) -> Self {
     Self {
-      game_state: GameState::Registration,
+      server_state: ServerState::Registration,
       registered: HashMap::new(),
       actors: HashMap::new(),
       viewers: HashSet::new(),
@@ -89,7 +89,7 @@ impl Actor for GameMediatorActor {
 impl GameMediatorActor {
   /// Run once every second to update the registration state
   fn tick_registration_update(&mut self) {
-    if self.game_state != GameState::Registration {
+    if self.server_state != ServerState::Registration {
       return;
     }
 
@@ -111,7 +111,7 @@ impl GameMediatorActor {
   fn start_game(&mut self) {
     // Pick a random order for the players
     let player_order: Vec<_> = self.registered.iter().map(|(id, _)| id.clone()).collect();
-    self.game_state = GameState::Initializing;
+    self.server_state = ServerState::Initializing;
 
     // Notify all players that game is starting
     self.broadcast_all(GameStarting::new(self.registered.clone(), player_order.clone()));
@@ -129,13 +129,13 @@ impl Handler<Connect> for GameMediatorActor {
       return ConnectResponse::AlreadyConnected;
     }
 
-    if !self.game_state.can_change_registration() && !self.registered.contains_key(&player_id) {
+    if !self.server_state.can_change_registration() && !self.registered.contains_key(&player_id) {
       return ConnectResponse::NotRegistered;
     }
 
     self.actors.insert(player_id, addr);
 
-    ConnectResponse::Ok(self.game_state)
+    ConnectResponse::Ok(self.server_state)
   }
 }
 
@@ -156,7 +156,7 @@ impl Handler<ConnectViewer> for GameMediatorActor {
 
   fn handle(&mut self, ConnectViewer(addr): ConnectViewer, _: &mut Self::Context) -> Self::Result {
     self.viewers.insert(addr);
-    ConnectViewerResponse(self.game_state)
+    ConnectViewerResponse(self.server_state)
   }
 }
 
@@ -172,7 +172,7 @@ impl Handler<Register> for GameMediatorActor {
   type Result = bool;
 
   fn handle(&mut self, Register { id, data }: Register, _: &mut Self::Context) -> Self::Result {
-    if !self.game_state.can_change_registration() {
+    if !self.server_state.can_change_registration() {
       return false;
     }
 
@@ -197,7 +197,7 @@ impl Handler<Unregister> for GameMediatorActor {
   type Result = bool;
 
   fn handle(&mut self, Unregister { id }: Unregister, _: &mut Self::Context) -> Self::Result {
-    if !self.game_state.can_change_registration() {
+    if !self.server_state.can_change_registration() {
       return false;
     }
 
@@ -215,7 +215,7 @@ impl Handler<Init> for GameMediatorActor {
   type Result = ();
 
   fn handle(&mut self, init: Init, _: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Running;
+    self.server_state = ServerState::Running;
     self.broadcast_all(init);
   }
 }
@@ -241,7 +241,7 @@ impl Handler<GameEnded> for GameMediatorActor {
 
   fn handle(&mut self, game_ended: GameEnded, _: &mut Self::Context) -> Self::Result {
     self.registered.clear();
-    self.game_state = GameState::Registration;
+    self.server_state = ServerState::Registration;
     self.broadcast_all(game_ended);
   }
 }
@@ -250,7 +250,7 @@ impl Handler<GameEngineCrash> for GameMediatorActor {
   type Result = ();
 
   fn handle(&mut self, _: GameEngineCrash, _: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::FatalError;
+    self.server_state = ServerState::FatalError;
     for (_, actor) in self.actors.iter() {
       actor.do_send(GameEngineCrash);
     }

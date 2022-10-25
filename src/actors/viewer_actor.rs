@@ -9,13 +9,13 @@ use uuid::Uuid;
 
 use crate::actors::{mediator_messages::*, shared_messages::*, GameMediatorActor};
 use crate::errors::{ServiceError, WebsocketError};
-use crate::game::GameState;
+use crate::game::ServerState;
 use crate::protocol::{QueryResponse, ToBytestring, ViewerMessage};
 
 /// Actor used for managing the viewer communication
 pub struct ViewerActor {
   id: Uuid,
-  game_state: GameState,
+  server_state: ServerState,
   game_mediator: Addr<GameMediatorActor>,
 }
 
@@ -24,7 +24,7 @@ impl ViewerActor {
     Self {
       id,
       game_mediator,
-      game_state: GameState::Registration,
+      server_state: ServerState::Registration,
     }
   }
 
@@ -116,7 +116,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ViewerActor {
 
     // Handle the JSON messages
     match json {
-      ViewerMessage::GetCurrentState => self.get_current_state(ctx),
+      ViewerMessage::GetServerState => self.get_current_state(ctx),
     }
   }
 
@@ -130,10 +130,10 @@ impl Handler<ConnectViewerResponse> for ViewerActor {
   type Result = ();
 
   fn handle(&mut self, ConnectViewerResponse(state): ConnectViewerResponse, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = state;
+    self.server_state = state;
 
     // Special case: an error state should clse the connection
-    if state == GameState::FatalError {
+    if state == ServerState::FatalError {
       self.fatal_error(ServiceError::GameEngineCrash, CloseCode::Error, ctx);
     }
   }
@@ -159,7 +159,7 @@ impl Handler<GameStarting> for ViewerActor {
   type Result = ();
 
   fn handle(&mut self, starting: GameStarting, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Initializing;
+    self.server_state = ServerState::Initializing;
     ctx.text(starting.into_bytestring())
   }
 }
@@ -168,7 +168,7 @@ impl Handler<Init> for ViewerActor {
   type Result = ();
 
   fn handle(&mut self, init: Init, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Running;
+    self.server_state = ServerState::Running;
     ctx.text(init.into_bytestring())
   }
 }
@@ -193,13 +193,18 @@ impl Handler<GameEnded> for ViewerActor {
   type Result = ();
 
   fn handle(&mut self, game_ended: GameEnded, ctx: &mut Self::Context) -> Self::Result {
-    self.game_state = GameState::Registration;
+    self.server_state = ServerState::Registration;
     ctx.text(game_ended.into_bytestring())
   }
 }
 
 impl ViewerActor {
   fn get_current_state(&self, ctx: &mut <Self as Actor>::Context) {
-    Self::send_json(&QueryResponse::CurrentState { state: self.game_state }, ctx);
+    Self::send_json(
+      &QueryResponse::ServerState {
+        state: self.server_state,
+      },
+      ctx,
+    );
   }
 }

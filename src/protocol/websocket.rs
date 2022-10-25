@@ -11,6 +11,9 @@ pub enum WebsocketMessage {
   Register,
   Unregister,
 
+  // Queries
+  GetServerState,
+
   // Player actions
   Move(TaggedRequest<MoveAction>),
   Attack(TaggedRequest<AttackAction>),
@@ -21,5 +24,5 @@ pub enum WebsocketMessage {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ViewerMessage {
-  GetCurrentState,
+  GetServerState,
 }
