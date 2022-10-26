@@ -5,11 +5,9 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::actors::{mediator_messages::*, shared_messages::*, ViewerActor, WebsocketActor};
+use crate::config;
 use crate::game::ServerState;
 use crate::jwt::JWTPlayerData;
-
-const MIN_PLAYERS_NEEDED: usize = 2;
-const LOBBY_WAIT_SECS: u32 = 10;
 
 /// Actor that facilitates communication between the websocket actors and the game engine
 pub struct GameMediatorActor {
@@ -18,21 +16,40 @@ pub struct GameMediatorActor {
   actors: HashMap<Uuid, Addr<WebsocketActor>>,
   viewers: HashSet<Addr<ViewerActor>>,
   send_start_game: Sender<Vec<Uuid>>,
-  min_players_needed: usize,
+  min_players_required: usize,
+  max_players_allowed: usize,
+  lobby_wait_secs: u32,
   secs_left: u32,
 }
 
 impl GameMediatorActor {
   /// Construct a new game mediator actor with the given channel
   pub fn new(send_start_game: Sender<Vec<Uuid>>) -> Self {
+    let min_players_required = config::get_min_players_required();
+    let mut max_players_allowed = config::get_max_players_allowed();
+
+    if max_players_allowed < min_players_required {
+      log::warn!(
+        "MAX_PLAYERS_ALLOWED is smaller than MIN_PLAYERS_REQUIRED ({} < {}), using value '{}' instead",
+        max_players_allowed,
+        min_players_required,
+        min_players_required
+      );
+      max_players_allowed = min_players_required;
+    }
+
+    let lobby_wait_secs = config::get_lobby_wait_time_seconds();
+
     Self {
       server_state: ServerState::Registration,
       registered: HashMap::new(),
       actors: HashMap::new(),
       viewers: HashSet::new(),
       send_start_game,
-      min_players_needed: MIN_PLAYERS_NEEDED,
-      secs_left: LOBBY_WAIT_SECS,
+      min_players_required,
+      max_players_allowed,
+      lobby_wait_secs,
+      secs_left: lobby_wait_secs,
     }
   }
 
@@ -57,15 +74,15 @@ impl GameMediatorActor {
 
   /// Send an update with the latest registration details
   fn broadcast_registration_update(&self) {
-    if self.registered.len() < self.min_players_needed {
+    if self.registered.len() < self.min_players_required {
       self.broadcast_all(RegistrationUpdate::waiting_on_players(
         self.registered.clone(),
-        self.min_players_needed,
+        self.min_players_required,
       ));
     } else {
       self.broadcast_all(RegistrationUpdate::game_starting_soon(
         self.registered.clone(),
-        self.min_players_needed,
+        self.min_players_required,
         self.secs_left,
       ));
     };
@@ -93,7 +110,7 @@ impl GameMediatorActor {
       return;
     }
 
-    if self.registered.len() < self.min_players_needed {
+    if self.registered.len() < self.min_players_required {
       return;
     }
 
@@ -169,27 +186,36 @@ impl Handler<DisconnectViewer> for GameMediatorActor {
 }
 
 impl Handler<Register> for GameMediatorActor {
-  type Result = bool;
+  type Result = RegisterResponse;
 
   fn handle(&mut self, Register { id, data }: Register, _: &mut Self::Context) -> Self::Result {
     if !self.server_state.can_change_registration() {
-      return false;
+      return RegisterResponse::GameAlreadyStarted;
     }
 
-    let not_enough_before = self.registered.len() < self.min_players_needed;
+    let not_enough_before = self.registered.len() < self.min_players_required;
 
-    // Force register the player, even if they are already registered
-    self.registered.insert(id, data);
+    // Since this is idempotent, register the player ONLY if they aren't already registered
+    if !self.registered.contains_key(&id) {
+      // Make sure we aren't at the maximum players yet
+      if self.registered.len() >= self.max_players_allowed {
+        return RegisterResponse::TooManyRegistered {
+          max_allowed: self.max_players_allowed,
+        };
+      }
 
-    // Reset the lobby counter if needed
-    if not_enough_before && self.registered.len() >= self.min_players_needed {
-      self.secs_left = LOBBY_WAIT_SECS;
+      self.registered.insert(id, data);
+    }
+
+    // Reset the lobby counter when the count just goes over the minimum number of players needed
+    if not_enough_before && self.registered.len() >= self.min_players_required {
+      self.secs_left = self.lobby_wait_secs;
     }
 
     // Broadcast the update
     self.broadcast_registration_update();
 
-    true
+    RegisterResponse::Success
   }
 }
 

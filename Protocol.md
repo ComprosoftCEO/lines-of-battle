@@ -175,8 +175,9 @@ See [Server Events](#server-events) for more details about messages that can be 
 
 When the game is running, alive player clients need to send one action to the server every game "tick" to move their player in the game.
 Only the first action is stored; subsequent actions sent during the same game tick will return an error.
-If a client does not send an action before the second time-window expires, then their player doesn't move that round.
-After the one-second time window has passed, the game server will grab the current list of actions and update the game state in the specified player order.
+If a client does not send an action before the time-window expires, then their player doesn't move that round.
+After the tick time window time window has passed, the game server will grab the current list of actions and update the game state in the specified player order.
+By default, a game tick occurs every real-world second, but this can be changed by the server administrator.
 
 Each player action has an optional string `tag` field that can be used by the client.
 When the server returns the [Next State Message](#next-state), it includes the list of actions taken during the current game tick.
@@ -380,13 +381,14 @@ interface GameStarting {
 **Sent to:** All players and all viewers
 
 This message indicates that the game has now officially started.
-It returns the initial game world state and the number of seconds left in the game.
+It returns the initial game world state and the number of "ticks" left in the game.
 
 ```typescript
 interface GameInitialized {
   type: "init";
   gameState: GameState;
-  secondsLeft: number;
+  ticksLeft: number;
+  secondsPerTick: number;
 }
 ```
 
@@ -394,7 +396,7 @@ interface GameInitialized {
 
 **Sent to:** All players and all viewers
 
-This message returns the next state of the game world and the number of seconds left in the game.
+This message returns the next state of the game world and the number of "ticks" left in the game.
 It also returns a map of the actions that were performed by the players during the last tick.
 Note that the map may not contain an entry for every player if a player didn't take an action during the last game tick.
 
@@ -403,7 +405,8 @@ interface NextState {
   type: "nextState";
   gameState: GameState;
   actionsTaken: Map<Uuid, PlayerAction>;
-  secondsLeft: number;
+  ticksLeft: number;
+  secondsPerTick: number;
 }
 ```
 

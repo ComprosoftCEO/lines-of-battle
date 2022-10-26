@@ -245,8 +245,18 @@ impl WebsocketActor {
         data: self.player_data.clone(),
       }))
       .map(|result, this, ctx| match result {
-        Ok(true) => {},
-        Ok(false) => Self::send_error(ServiceError::FailedToRegister(this.player_id), ctx),
+        Ok(RegisterResponse::Success) => {},
+        Ok(RegisterResponse::GameAlreadyStarted) => Self::send_error(
+          ServiceError::FailedToRegister(this.player_id, "game already started".into()),
+          ctx,
+        ),
+        Ok(RegisterResponse::TooManyRegistered { max_allowed }) => Self::send_error(
+          ServiceError::FailedToRegister(
+            this.player_id,
+            format!("too many players registered ({} maximum allowed)", max_allowed),
+          ),
+          ctx,
+        ),
         Err(e) => Self::send_error(ServiceError::WebsocketMailboxError(e), ctx),
       }),
     );

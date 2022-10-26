@@ -25,7 +25,7 @@ pub enum ServiceError {
   WebsocketError(WebsocketError),
   WebsocketMailboxError(MailboxError),
   NotRegistered(Uuid),
-  FailedToRegister(Uuid),
+  FailedToRegister(Uuid, String),
   FailedToUnregister(Uuid),
   AlreadyConnected(Uuid),
   GameEngineError(GameEngineError),
@@ -120,9 +120,9 @@ impl ServiceError {
         format!("Player ID: {}", player_id),
       ),
 
-      ServiceError::FailedToRegister(player_id) => ErrorResponse::new(
+      ServiceError::FailedToRegister(player_id, why) => ErrorResponse::new(
         StatusCode::CONFLICT,
-        "Failed to register player".into(),
+        format!("Failed to register player: {}", why),
         GlobalErrorCode::FailedToRegister,
         format!("Player ID: {}", player_id),
       ),

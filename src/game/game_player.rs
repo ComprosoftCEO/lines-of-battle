@@ -10,10 +10,10 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::actors::{shared_messages::*, GameMediatorActor};
+use crate::config;
 use crate::errors::GameEngineError;
 use crate::protocol::{game::GameState, PlayerAction};
 
-const SECONDS_PER_GAME: u32 = 60 * 3;
 const MAX_TRIES: usize = 5;
 
 /// Encapsulates the logic of running the Lua game engine on a given thread
@@ -25,8 +25,9 @@ pub struct GamePlayer {
 
   player_order: Arc<Vec<Uuid>>,
   players_remaining: Arc<Mutex<HashSet<Uuid>>>,
-  seconds_per_game: u32,
-  seconds_left: u32,
+  ticks_per_game: u32,
+  seconds_per_tick: u32,
+  ticks_left: u32,
 }
 
 #[derive(Clone)]
@@ -34,8 +35,8 @@ struct GamePlayerUserData {
   mediator_addr: Addr<GameMediatorActor>,
   player_order: Arc<Vec<Uuid>>,
   players_remaining: Arc<Mutex<HashSet<Uuid>>>,
-  seconds_per_game: u32,
-  seconds_left: u32,
+  ticks_per_game: u32,
+  ticks_left: u32,
 }
 
 impl GamePlayer {
@@ -92,8 +93,9 @@ impl GamePlayer {
       mediator_addr,
       player_order: Arc::default(),
       players_remaining: Arc::default(),
-      seconds_per_game: SECONDS_PER_GAME,
-      seconds_left: 0,
+      ticks_per_game: config::get_ticks_per_game(),
+      seconds_per_tick: config::get_seconds_per_tick(),
+      ticks_left: 0,
     })
   }
 
@@ -104,8 +106,8 @@ impl GamePlayer {
       mediator_addr: self.mediator_addr.clone(),
       player_order: self.player_order.clone(),
       players_remaining: self.players_remaining.clone(),
-      seconds_per_game: self.seconds_per_game,
-      seconds_left: self.seconds_left,
+      ticks_per_game: self.ticks_per_game,
+      ticks_left: self.ticks_left,
     }
   }
 
@@ -122,7 +124,7 @@ impl GamePlayer {
   /// 1. There are 2 or more players left in the game
   /// 2. AND there is time left on the clock
   fn is_round_running(&self) -> bool {
-    self.seconds_left > 0 && self.players_remaining.lock().unwrap().len() > 1
+    self.ticks_left > 0 && self.players_remaining.lock().unwrap().len() > 1
   }
 
   ///
@@ -143,17 +145,19 @@ impl GamePlayer {
       // Initialize the game!
       log::info!("Initializing game engine...");
       let initial_state = Self::trap_errors(MAX_TRIES, || self.init_game(&player_order))?;
-      self.mediator_addr.do_send(Init::new(initial_state, self.seconds_left));
+      self
+        .mediator_addr
+        .do_send(Init::new(initial_state, self.ticks_left, self.seconds_per_tick));
 
       // Run until there is no time left
       while self.is_round_running() {
-        // Sleep for roughtly one second before running the next tick
-        thread::sleep(Duration::from_secs(1));
-        self.seconds_left -= 1;
+        // Sleep for "seconds_per_tick" seconds before running the next tick
+        thread::sleep(Duration::from_secs(self.seconds_per_tick as u64));
+        self.ticks_left -= 1;
         log::info!(
-          "Game engine running - {} second{} remaining",
-          self.seconds_left,
-          if self.seconds_left == 1 { "" } else { "s" }
+          "Game engine running - {} tick{} remaining",
+          self.ticks_left,
+          if self.ticks_left == 1 { "" } else { "s" }
         );
 
         // Read the list of player actions from the channel
@@ -171,9 +175,12 @@ impl GamePlayer {
 
         // Notify the mediator of the change
         if self.is_round_running() {
-          self
-            .mediator_addr
-            .do_send(NextState::new(next_state, player_actions, self.seconds_left));
+          self.mediator_addr.do_send(NextState::new(
+            next_state,
+            player_actions,
+            self.ticks_left,
+            self.seconds_per_tick,
+          ));
         } else {
           self.mediator_addr.do_send(GameEnded::new(
             self.players_remaining.lock().unwrap().clone(),
@@ -193,7 +200,7 @@ impl GamePlayer {
   fn init_game(&mut self, player_order: &Vec<Uuid>) -> Result<GameState, GameEngineError> {
     // Initialize game player variables
     self.player_order = Arc::new(player_order.clone());
-    self.seconds_left = self.seconds_per_game;
+    self.ticks_left = self.ticks_per_game;
     self.players_remaining = Arc::new(Mutex::new(player_order.iter().cloned().collect()));
 
     // Run the Lua Init() method and return the initial game state as JSON
@@ -307,8 +314,8 @@ impl LuaUserData for GamePlayerUserData {
       )
     });
 
-    methods.add_method("getSecondsLeft", |_, this, _: ()| {
-      Ok((this.seconds_left, this.seconds_per_game))
+    methods.add_method("getTicksLeft", |_, this, _: ()| {
+      Ok((this.ticks_left, this.ticks_per_game))
     });
   }
 }

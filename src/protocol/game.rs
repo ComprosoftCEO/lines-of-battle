@@ -11,14 +11,19 @@ use crate::protocol::PlayerAction;
 pub enum GameStateUpdate {
   /// Game has just been initialized (returns the initial game state)
   #[serde(rename_all = "camelCase")]
-  Init { game_state: GameState, seconds_left: u32 },
+  Init {
+    game_state: GameState,
+    ticks_left: u32,
+    seconds_per_tick: u32,
+  },
 
   /// Game has been updated
   #[serde(rename_all = "camelCase")]
   NextState {
     game_state: GameState,
     actions_taken: HashMap<Uuid, PlayerAction>,
-    seconds_left: u32,
+    ticks_left: u32,
+    seconds_per_tick: u32,
   },
 
   /// Sent every time a player is killed

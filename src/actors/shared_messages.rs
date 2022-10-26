@@ -70,11 +70,12 @@ impl GameStarting {
 pub struct Init(ByteString);
 
 impl Init {
-  pub fn new(game_state: GameState, seconds_left: u32) -> Self {
+  pub fn new(game_state: GameState, ticks_left: u32, seconds_per_tick: u32) -> Self {
     Self(
       GameStateUpdate::Init {
         game_state,
-        seconds_left,
+        ticks_left,
+        seconds_per_tick,
       }
       .into_bytestring(),
     )
@@ -89,12 +90,18 @@ impl Init {
 pub struct NextState(ByteString);
 
 impl NextState {
-  pub fn new(game_state: GameState, actions_taken: HashMap<Uuid, PlayerAction>, seconds_left: u32) -> Self {
+  pub fn new(
+    game_state: GameState,
+    actions_taken: HashMap<Uuid, PlayerAction>,
+    ticks_left: u32,
+    seconds_per_tick: u32,
+  ) -> Self {
     Self(
       GameStateUpdate::NextState {
         game_state,
         actions_taken,
-        seconds_left,
+        ticks_left,
+        seconds_per_tick,
       }
       .into_bytestring(),
     )

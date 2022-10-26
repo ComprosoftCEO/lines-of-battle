@@ -40,13 +40,18 @@ pub struct ConnectViewerResponse(pub ServerState);
 pub struct DisconnectViewer(pub Addr<ViewerActor>);
 
 /// Register a player in the game -- This is idempotent
-///  Returns true to indicate player is marked as registered
-///  Returns false if game is started and player is not registered
 #[derive(Debug, Clone, Message)]
-#[rtype(result = "bool")]
+#[rtype(result = "RegisterResponse")]
 pub struct Register {
   pub id: Uuid,
   pub data: JWTPlayerData,
+}
+
+#[derive(Debug, Clone, Copy, MessageResponse)]
+pub enum RegisterResponse {
+  Success,
+  GameAlreadyStarted,
+  TooManyRegistered { max_allowed: usize },
 }
 
 /// Unregister a player from the game -- This is idempotent
