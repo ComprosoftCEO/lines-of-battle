@@ -13,6 +13,7 @@ pub enum WebsocketMessage {
 
   // Queries
   GetServerState,
+  GetRegisteredPlayers,
 
   // Player actions
   Move(TaggedRequest<MoveAction>),
@@ -25,4 +26,5 @@ pub enum WebsocketMessage {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ViewerMessage {
   GetServerState,
+  GetRegisteredPlayers,
 }

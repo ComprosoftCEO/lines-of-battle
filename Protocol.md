@@ -222,6 +222,7 @@ enum Direction {
 ### Game State Type
 
 The `GameState` type defines all details about the current game state in the world.
+**Important Note:** The `players` field only lists the players remaining in the game, not any killed players.
 
 ```typescript
 interface GameState {
@@ -318,7 +319,27 @@ interface GetServerStateResponse {
 }
 ```
 
-_More queries to be added in the future..._
+### Get Registered Players
+
+**Allowed by:** player, viewer
+
+This request returns the list of users registered in the server.
+If the game is running, it also sends the order of players.
+This query can be sent at any time.
+
+```typescript
+interface GetRegisteredPlayersRequest {
+  type: "getRegisteredPlayers";
+}
+
+interface GetRegisteredPlayersResponse {
+  type: "registeredPlayers";
+  players: Map<Uuid, JWTPlayerData>;
+  playerOrder?: Uuid[];
+}
+```
+
+_More queries may be added in the future..._
 
 <br />
 

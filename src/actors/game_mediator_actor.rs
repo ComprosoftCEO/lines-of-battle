@@ -15,6 +15,7 @@ pub struct GameMediatorActor {
   registered: HashMap<Uuid, JWTPlayerData>, // Stores ID and other player data
   actors: HashMap<Uuid, Addr<WebsocketActor>>,
   viewers: HashSet<Addr<ViewerActor>>,
+  player_order: Option<Vec<Uuid>>,
   send_start_game: Sender<Vec<Uuid>>,
   min_players_required: usize,
   max_players_allowed: usize,
@@ -45,6 +46,7 @@ impl GameMediatorActor {
       registered: HashMap::new(),
       actors: HashMap::new(),
       viewers: HashSet::new(),
+      player_order: None,
       send_start_game,
       min_players_required,
       max_players_allowed,
@@ -128,6 +130,7 @@ impl GameMediatorActor {
   fn start_game(&mut self) {
     // Pick a random order for the players
     let player_order: Vec<_> = self.registered.iter().map(|(id, _)| id.clone()).collect();
+    self.player_order = Some(player_order.clone());
     self.server_state = ServerState::Initializing;
 
     // Notify all players that game is starting
@@ -267,6 +270,7 @@ impl Handler<GameEnded> for GameMediatorActor {
 
   fn handle(&mut self, game_ended: GameEnded, _: &mut Self::Context) -> Self::Result {
     self.registered.clear();
+    self.player_order = None;
     self.server_state = ServerState::Registration;
     self.broadcast_all(game_ended);
   }
@@ -277,8 +281,21 @@ impl Handler<GameEngineCrash> for GameMediatorActor {
 
   fn handle(&mut self, _: GameEngineCrash, _: &mut Self::Context) -> Self::Result {
     self.server_state = ServerState::FatalError;
+    self.player_order = None;
+
     for (_, actor) in self.actors.iter() {
       actor.do_send(GameEngineCrash);
+    }
+  }
+}
+
+impl Handler<GetRegisteredPlayers> for GameMediatorActor {
+  type Result = GetRegisteredPlayersResponse;
+
+  fn handle(&mut self, _: GetRegisteredPlayers, _: &mut Self::Context) -> Self::Result {
+    GetRegisteredPlayersResponse {
+      players: self.registered.clone(),
+      player_order: self.player_order.clone(),
     }
   }
 }

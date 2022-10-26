@@ -134,6 +134,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketActor {
       WebsocketMessage::Register => self.register(ctx),
       WebsocketMessage::Unregister => self.unregister(ctx),
       WebsocketMessage::GetServerState => self.send_server_state(ctx),
+      WebsocketMessage::GetRegisteredPlayers => self.send_registered_players(ctx),
       WebsocketMessage::Move(action) => self.do_action(action.transpose(), ctx),
       WebsocketMessage::Attack(action) => self.do_action(action.transpose(), ctx),
       WebsocketMessage::DropWeapon(action) => self.do_action(action.transpose(), ctx),
@@ -281,6 +282,22 @@ impl WebsocketActor {
         state: self.server_state,
       },
       ctx,
+    );
+  }
+
+  fn send_registered_players(&self, ctx: &mut <Self as Actor>::Context) {
+    // Spawn a future to process the request
+    ctx.spawn(
+      wrap_future::<_, Self>(self.game_mediator.send(GetRegisteredPlayers)).map(|result, _this, ctx| match result {
+        Ok(registered) => Self::send_json(
+          &QueryResponse::RegisteredPlayers {
+            players: registered.players,
+            player_order: registered.player_order,
+          },
+          ctx,
+        ),
+        Err(e) => Self::send_error(ServiceError::WebsocketMailboxError(e), ctx),
+      }),
     );
   }
 

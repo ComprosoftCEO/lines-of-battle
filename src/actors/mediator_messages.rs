@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::actors::{ViewerActor, WebsocketActor};
@@ -61,4 +62,15 @@ pub enum RegisterResponse {
 #[rtype(result = "bool")]
 pub struct Unregister {
   pub id: Uuid,
+}
+
+/// Get the list of registered players from the mediator
+#[derive(Debug, Clone, Message)]
+#[rtype(result = "GetRegisteredPlayersResponse")]
+pub struct GetRegisteredPlayers;
+
+#[derive(Debug, Clone, MessageResponse)]
+pub struct GetRegisteredPlayersResponse {
+  pub players: HashMap<Uuid, JWTPlayerData>,
+  pub player_order: Option<Vec<Uuid>>,
 }

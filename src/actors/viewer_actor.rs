@@ -1,6 +1,7 @@
 //
 // Actor that broadcasts the websocket notifications
 //
+use actix::fut::wrap_future;
 use actix::prelude::*;
 use actix_http::ws::{CloseCode, CloseReason};
 use actix_web_actors::ws;
@@ -116,7 +117,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ViewerActor {
 
     // Handle the JSON messages
     match json {
-      ViewerMessage::GetServerState => self.get_current_state(ctx),
+      ViewerMessage::GetServerState => self.send_current_state(ctx),
+      ViewerMessage::GetRegisteredPlayers => self.send_registered_players(ctx),
     }
   }
 
@@ -199,12 +201,28 @@ impl Handler<GameEnded> for ViewerActor {
 }
 
 impl ViewerActor {
-  fn get_current_state(&self, ctx: &mut <Self as Actor>::Context) {
+  fn send_current_state(&self, ctx: &mut <Self as Actor>::Context) {
     Self::send_json(
       &QueryResponse::ServerState {
         state: self.server_state,
       },
       ctx,
+    );
+  }
+
+  fn send_registered_players(&self, ctx: &mut <Self as Actor>::Context) {
+    // Spawn a future to process the request
+    ctx.spawn(
+      wrap_future::<_, Self>(self.game_mediator.send(GetRegisteredPlayers)).map(|result, _this, ctx| match result {
+        Ok(registered) => Self::send_json(
+          &QueryResponse::RegisteredPlayers {
+            players: registered.players,
+            player_order: registered.player_order,
+          },
+          ctx,
+        ),
+        Err(e) => Self::send_error(ServiceError::WebsocketMailboxError(e), ctx),
+      }),
     );
   }
 }
