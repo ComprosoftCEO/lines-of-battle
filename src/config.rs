@@ -12,7 +12,7 @@ const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 53700;
 const DEFAULT_JWT_SECRET: &str = "secret";
 
-const DEFAULT_LUA_FILE: &str = "lua/game.lua";
+pub const DEFAULT_LUA_FILE: &str = "lua/game.lua";
 
 const DEFAULT_MIN_PLAYERS: usize = 2;
 const DEFAULT_MAX_PLAYERS: usize = 8;

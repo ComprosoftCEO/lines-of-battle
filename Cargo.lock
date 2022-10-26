@@ -779,6 +779,7 @@ dependencies = [
  "futures",
  "jsonwebtoken",
  "log",
+ "rand",
  "rlua",
  "rlua_serde",
  "rustls",

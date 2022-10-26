@@ -1,3 +1,5 @@
+use std::error;
+use std::fmt;
 use std::io;
 
 /// All errors that can occur with the game engine
@@ -40,3 +42,11 @@ impl GameEngineError {
     }
   }
 }
+
+impl fmt::Display for GameEngineError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:?}", self.get_developer_notes())
+  }
+}
+
+impl error::Error for GameEngineError {}

@@ -13,6 +13,19 @@ pub struct TaggedRequest<T> {
   pub data: T,
 }
 
+impl<T> TaggedRequest<T> {
+  pub fn new(data: T) -> Self {
+    Self { data, tag: None }
+  }
+
+  pub fn new_tagged(data: T, tag: impl Into<String>) -> Self {
+    Self {
+      data,
+      tag: Some(tag.into()),
+    }
+  }
+}
+
 impl TaggedRequest<MoveAction> {
   /// Move the tag to an outside data structure
   pub fn transpose(self) -> TaggedRequest<PlayerActionEnum> {
