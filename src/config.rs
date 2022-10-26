@@ -51,7 +51,7 @@ pub struct Opt {
   #[structopt(long, env, default_value = DEFAULT_LUA_FILE)]
   lua_file: String,
 
-  /// Minimum number of players required for the game
+  /// Minimum number of players required to play the game
   #[structopt(long, env, default_value = "2")]
   min_players_needed: usize,
 
@@ -181,10 +181,10 @@ pub fn get_lua_file() -> String {
 //
 // Game Configuration Variables
 //
-pub fn get_min_players_required() -> usize {
-  let min_players = parse_with_warning("MIN_PLAYERS_REQUIRED", DEFAULT_MIN_PLAYERS);
+pub fn get_min_players_needed() -> usize {
+  let min_players = parse_with_warning("MIN_PLAYERS_NEEDED", DEFAULT_MIN_PLAYERS);
   if min_players < 2 {
-    log::warn!("MIN_PLAYERS_REQUIRED cannot be less than 2, using minimum value '2'");
+    log::warn!("MIN_PLAYERS_NEEDED cannot be less than 2, using minimum value '2'");
     2
   } else {
     min_players

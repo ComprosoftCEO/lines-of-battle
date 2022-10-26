@@ -17,7 +17,7 @@ pub struct GameMediatorActor {
   viewers: HashSet<Addr<ViewerActor>>,
   player_order: Option<Vec<Uuid>>,
   send_start_game: Sender<Vec<Uuid>>,
-  min_players_required: usize,
+  min_players_needed: usize,
   max_players_allowed: usize,
   lobby_wait_secs: u32,
   secs_left: u32,
@@ -26,17 +26,17 @@ pub struct GameMediatorActor {
 impl GameMediatorActor {
   /// Construct a new game mediator actor with the given channel
   pub fn new(send_start_game: Sender<Vec<Uuid>>) -> Self {
-    let min_players_required = config::get_min_players_required();
+    let min_players_needed = config::get_min_players_needed();
     let mut max_players_allowed = config::get_max_players_allowed();
 
-    if max_players_allowed < min_players_required {
+    if max_players_allowed < min_players_needed {
       log::warn!(
-        "MAX_PLAYERS_ALLOWED is smaller than MIN_PLAYERS_REQUIRED ({} < {}), using value '{}' instead",
+        "MAX_PLAYERS_ALLOWED is smaller than MIN_PLAYERS_NEEDED ({} < {}), using value '{}' instead",
         max_players_allowed,
-        min_players_required,
-        min_players_required
+        min_players_needed,
+        min_players_needed
       );
-      max_players_allowed = min_players_required;
+      max_players_allowed = min_players_needed;
     }
 
     let lobby_wait_secs = config::get_lobby_wait_time_seconds();
@@ -48,7 +48,7 @@ impl GameMediatorActor {
       viewers: HashSet::new(),
       player_order: None,
       send_start_game,
-      min_players_required,
+      min_players_needed,
       max_players_allowed,
       lobby_wait_secs,
       secs_left: lobby_wait_secs,
@@ -76,15 +76,17 @@ impl GameMediatorActor {
 
   /// Send an update with the latest registration details
   fn broadcast_registration_update(&self) {
-    if self.registered.len() < self.min_players_required {
+    if self.registered.len() < self.min_players_needed {
       self.broadcast_all(RegistrationUpdate::waiting_on_players(
         self.registered.clone(),
-        self.min_players_required,
+        self.min_players_needed,
+        self.max_players_allowed,
       ));
     } else {
       self.broadcast_all(RegistrationUpdate::game_starting_soon(
         self.registered.clone(),
-        self.min_players_required,
+        self.min_players_needed,
+        self.max_players_allowed,
         self.secs_left,
       ));
     };
@@ -112,7 +114,7 @@ impl GameMediatorActor {
       return;
     }
 
-    if self.registered.len() < self.min_players_required {
+    if self.registered.len() < self.min_players_needed {
       return;
     }
 
@@ -196,7 +198,7 @@ impl Handler<Register> for GameMediatorActor {
       return RegisterResponse::GameAlreadyStarted;
     }
 
-    let not_enough_before = self.registered.len() < self.min_players_required;
+    let not_enough_before = self.registered.len() < self.min_players_needed;
 
     // Since this is idempotent, register the player ONLY if they aren't already registered
     if !self.registered.contains_key(&id) {
@@ -211,7 +213,7 @@ impl Handler<Register> for GameMediatorActor {
     }
 
     // Reset the lobby counter when the count just goes over the minimum number of players needed
-    if not_enough_before && self.registered.len() >= self.min_players_required {
+    if not_enough_before && self.registered.len() >= self.min_players_needed {
       self.secs_left = self.lobby_wait_secs;
     }
 

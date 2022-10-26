@@ -323,7 +323,7 @@ interface GetServerStateResponse {
 
 **Allowed by:** player, viewer
 
-This request returns the list of users registered in the server.
+This request returns the list of players registered in the server.
 If the game is running, it also sends the order of players.
 This query can be sent at any time.
 
@@ -360,6 +360,7 @@ interface WaitingOnPlayers {
   type: "waitingOnPlayers";
   players: Map<Uuid, JWTPlayerData>;
   minPlayersNeeded: number;
+  maxPlayersAllowed: number;
 }
 ```
 
@@ -377,6 +378,7 @@ interface GameStartingSoon {
   type: "gameStartingSoon";
   players: Map<Uuid, JWTPlayerData>;
   minPlayersNeeded: number;
+  maxPlayersAllowed: number;
   secondsLeft: number;
 }
 ```

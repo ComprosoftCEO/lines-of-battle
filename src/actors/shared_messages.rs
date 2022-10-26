@@ -19,11 +19,16 @@ pub struct GameEngineCrash;
 pub struct RegistrationUpdate(ByteString);
 
 impl RegistrationUpdate {
-  pub fn waiting_on_players(players: HashMap<Uuid, JWTPlayerData>, min_players_needed: usize) -> Self {
+  pub fn waiting_on_players(
+    players: HashMap<Uuid, JWTPlayerData>,
+    min_players_needed: usize,
+    max_players_allowed: usize,
+  ) -> Self {
     Self(
       RegistrationUpdateEnum::WaitingOnPlayers {
         players,
         min_players_needed,
+        max_players_allowed,
       }
       .into_bytestring(),
     )
@@ -32,12 +37,14 @@ impl RegistrationUpdate {
   pub fn game_starting_soon(
     players: HashMap<Uuid, JWTPlayerData>,
     min_players_needed: usize,
+    max_players_allowed: usize,
     seconds_left: u32,
   ) -> Self {
     Self(
       RegistrationUpdateEnum::GameStartingSoon {
         players,
         min_players_needed,
+        max_players_allowed,
         seconds_left,
       }
       .into_bytestring(),

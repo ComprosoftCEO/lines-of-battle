@@ -15,6 +15,7 @@ pub enum RegistrationUpdateEnum {
   WaitingOnPlayers {
     players: HashMap<Uuid, JWTPlayerData>,
     min_players_needed: usize,
+    max_players_allowed: usize,
   },
 
   /// Game has minimum number of players and will start soon
@@ -22,6 +23,7 @@ pub enum RegistrationUpdateEnum {
   GameStartingSoon {
     players: HashMap<Uuid, JWTPlayerData>,
     min_players_needed: usize,
+    max_players_allowed: usize,
     seconds_left: u32,
   },
 
