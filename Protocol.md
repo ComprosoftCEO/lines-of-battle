@@ -57,6 +57,9 @@ interface JWTPlayerData {
 }
 ```
 
+Finally, we use the `Map<K, V>` to represent a JavaScript object that maps string `K` to a given `V` value type.
+In TypeScript, this is more accurately represented as `Record<K, V>`, but we use Map for readability.
+
 <br />
 
 ## Communication
