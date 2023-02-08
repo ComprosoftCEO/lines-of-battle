@@ -84,27 +84,6 @@ function readyCanvas(givenWidth,givenheight)
     
 }
 
-//read in settings.json for JWT and viewer API path
-function readInConfig()
-{
-    //try to config info from settings.json
-    //alert on error
-    try 
-    {
-        var config = JSON.parse(settings);
-        return config[0]
-    } 
-    catch (error) 
-    {
-        console.error(error);
-        alert("Error parsing settings.json")
-
-        //return null, no configs read
-        return null
-    }
-    
-}
-
 //make connection to gameserver and return websoceket ref
 function connectToGameserver(addrAndPort,config)
 {
@@ -564,7 +543,7 @@ function runBattlefieldDisplay(addrAndPort,width,height)
 {
 
     //read in connection info from settings.json
-    var config = readInConfig();
+    var config = settings;
     
     //only continue if config is non null 
     if(config != null)
