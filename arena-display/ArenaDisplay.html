@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <link rel="stylesheet" href="ArenaDisplay.css">
+    </head>
+
+    <body>
+        <div class="body_holder">
+            <div class="header_row">
+                <div class="header_title_box">
+                    <br><b>Lines of Battle: Arena View</b>
+                </div>
+            </div>
+        
+            <div class="middle_row">
+                <div class="LM_column">
+                    <div class="serverStatusBox"> 
+                        <p id = "curStatus"><br>Server Status: Disconnected</p>
+                        <p id = "curPlayers">Connected Players: None</p>
+                    </div>
+                </div>
+
+                <div class="MM_column">
+                    <div class="serverInfoInput">
+                        <p id="infoBoxInstructions" >Connect to Game-Server! <br> Enter <b>Address:Port</b> and click start.</p>
+                        <input type="text" id="serverInfoBox"  value="127.0.0.1:53700" /></input>
+                        <div class="startButtonBox"></div>
+                    </div>
+                </div>
+
+                <div class="RM_column">
+                    <div class = turnInfo>
+                        <p id="ActionsTakenText" ><br>Actions will display here after game starts </p>
+                    </div>
+                </div>
+
+                <script type="text/javascript" src="settings.json"></script>
+                <script src="DisplayLogic.js"></script>      
+            </div>
+
+            <div class="foot_row">
+                Created by Aryan, Bryan, Croix, and Jon. 2022.
+            </div>
+        </div>
+    </body>
+
+</html>
