@@ -1,6 +1,7 @@
 # Game Server Protocol
 
 The following document details the protocol for interacting with the game server.
+All types from this document have been compiled into a single [Protocol.ts](Protocol.ts) TypeScript file.
 
 ## Connecting to the Server
 
@@ -56,9 +57,6 @@ interface JWTPlayerData {
   name: string;
 }
 ```
-
-Finally, we use the `Map<K, V>` to represent a JavaScript object that maps string `K` to a given `V` value type.
-In TypeScript, this is more accurately represented as `Record<K, V>`, but we use Map for readability.
 
 <br />
 
@@ -230,7 +228,7 @@ The `GameState` type defines all details about the current game state in the wor
 ```typescript
 interface GameState {
   playfield: PlayfieldObject[][];
-  players: Map<Uuid, Position<PlayerDetails>>;
+  players: Record<Uuid, Position<PlayerDetails>>;
   weapons: Position<Weapon>[];
   items: Position<Item>[]; // Unused right now
 }
@@ -337,7 +335,7 @@ interface GetRegisteredPlayersRequest {
 
 interface GetRegisteredPlayersResponse {
   type: "registeredPlayers";
-  players: Map<Uuid, JWTPlayerData>;
+  players: Record<Uuid, JWTPlayerData>;
   playerOrder?: Uuid[];
 }
 ```
@@ -361,7 +359,7 @@ If the number of registered players is more than the minimum number required, it
 ```typescript
 interface WaitingOnPlayers {
   type: "waitingOnPlayers";
-  players: Map<Uuid, JWTPlayerData>;
+  players: Record<Uuid, JWTPlayerData>;
   minPlayersNeeded: number;
   maxPlayersAllowed: number;
 }
@@ -379,7 +377,7 @@ If the number of registered players becomes less than the minimum number require
 ```typescript
 interface GameStartingSoon {
   type: "gameStartingSoon";
-  players: Map<Uuid, JWTPlayerData>;
+  players: Record<Uuid, JWTPlayerData>;
   minPlayersNeeded: number;
   maxPlayersAllowed: number;
   secondsLeft: number;
@@ -397,7 +395,7 @@ This message returns the official list of players registered in the game and the
 ```typescript
 interface GameStarting {
   type: "gameStarting";
-  players: Map<Uuid, JWTPlayerData>;
+  players: Record<Uuid, JWTPlayerData>;
   playerOrder: Uuid[];
 }
 ```
@@ -430,7 +428,7 @@ Note that the map may not contain an entry for every player if a player didn't t
 interface NextState {
   type: "nextState";
   gameState: GameState;
-  actionsTaken: Map<Uuid, PlayerAction>;
+  actionsTaken: Record<Uuid, PlayerAction>;
   ticksLeft: number;
   secondsPerTick: number;
 }
@@ -469,6 +467,6 @@ interface GameEnded {
   type: "gameEnded";
   winners: Uuid[];
   gameState: GameState;
-  actionsTaken: Map<Uuid, PlayerAction>;
+  actionsTaken: Record<Uuid, PlayerAction>;
 }
 ```
